@@ -1,8 +1,6 @@
-from ._template import TemplateEstimator
-from ._template import TemplateClassifier
-from ._template import TemplateTransformer
+from ._gle_estimator import GLE_Estimator
+from ._gle_datas_transform import GLE_Transformer
 
 from ._version import __version__
 
-__all__ = ['TemplateEstimator', 'TemplateClassifier', 'TemplateTransformer',
-           '__version__']
+__all__ = ["GLE_Estimator", "GLE_Transformer", "__version__"]
