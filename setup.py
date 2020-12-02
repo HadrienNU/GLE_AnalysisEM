@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""A template for scikit-learn compatible packages."""
+"""Statistical inference of Generalized Langevin Equation using Expectation-Maximization algorithm."""
 
 import codecs
 import os
@@ -11,28 +11,25 @@ ver_file = os.path.join('skltemplate', '_version.py')
 with open(ver_file) as f:
     exec(f.read())
 
-DISTNAME = 'sklearn-template'
-DESCRIPTION = 'A template for scikit-learn compatible packages.'
+DISTNAME = 'GLE_AnalysisEM'
+DESCRIPTION = 'Statistical inference of Generalized Langevin Equation using Expectation-Maximization algorithm.'
 with codecs.open('README.rst', encoding='utf-8-sig') as f:
     LONG_DESCRIPTION = f.read()
-MAINTAINER = 'V. Birodkars, G. Lemaitre'
-MAINTAINER_EMAIL = 'vighneshbirodkar@nyu.edu, g.lemaitre58@gmail.com'
-URL = 'https://github.com/scikit-learn-contrib/project-template'
+MAINTAINER = 'H. Vroylandt'
+MAINTAINER_EMAIL = 'hadrien.vroylandt@sorbonne-universite.fr'
+URL = 'https://github.com/HadrienNU/GLE_AnalysisEM'
 LICENSE = 'new BSD'
-DOWNLOAD_URL = 'https://github.com/scikit-learn-contrib/project-template'
+DOWNLOAD_URL = 'https://github.com/HadrienNU/GLE_AnalysisEM'
 VERSION = __version__
-INSTALL_REQUIRES = ['numpy', 'scipy', 'scikit-learn']
+INSTALL_REQUIRES = ['numpy', 'scipy', 'scikit-learn','xarray','pandas']
 CLASSIFIERS = ['Intended Audience :: Science/Research',
-               'Intended Audience :: Developers',
                'License :: OSI Approved',
                'Programming Language :: Python',
-               'Topic :: Software Development',
                'Topic :: Scientific/Engineering',
                'Operating System :: Microsoft :: Windows',
                'Operating System :: POSIX',
                'Operating System :: Unix',
                'Operating System :: MacOS',
-               'Programming Language :: Python :: 2.7',
                'Programming Language :: Python :: 3.5',
                'Programming Language :: Python :: 3.6',
                'Programming Language :: Python :: 3.7']
