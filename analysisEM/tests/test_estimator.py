@@ -1,50 +1,32 @@
 import pytest
 import numpy as np
 
-from sklearn.datasets import load_iris
-from sklearn.utils.testing import assert_array_equal
-from sklearn.utils.testing import assert_allclose
+# from sklearn.utils import assert_array_equal
+# from sklearn.utils import assert_allclose
 
 from analysisEM import GLE_Estimator
-from analysisEM import GLE_Transformer
 
 
 @pytest.fixture
 def data():
-    return load_iris(return_X_y=True)
+    return np.loadtxt("analysisEM/tests/test_traj.dat").reshape(1, -1)
 
 
-def test_template_transformer(data):
-    X, y = data
-    trans = GLE_Transformer()
-    assert trans.demo_param == "demo"
-
-    trans.fit(X)
-    assert trans.n_features_ == X.shape[1]
-
-    X_trans = trans.transform(X)
-    assert_allclose(X_trans, np.sqrt(X))
-
-    X_trans = trans.fit_transform(X)
-    assert_allclose(X_trans, np.sqrt(X))
-
-
-def test_template_transformer_error(data):
-    X, y = data
-    trans = GLE_Transformer()
-    trans.fit(X)
-    with pytest.raises(ValueError, match="Shape of input is different"):
-        X_diff_size = np.ones((10, X.shape[1] + 1))
-        trans.transform(X_diff_size)
-
-
-def test_template_estimator(data):
+def test_em_estimator_n_iter(data):
+    # check that n_iter is the number of iteration performed.
     est = GLE_Estimator()
-    assert est.demo_param == "demo_param"
+    max_iter = 1
+    est.set_params(max_iter=max_iter)
+    est.fit(data)
+    assert est.n_iter_ == max_iter
 
-    est.fit(*data)
-    assert hasattr(est, "is_fitted_")
+
+def test_em_estimator(data):
+    est = GLE_Estimator()
+    assert est.dt == 5e-3
+
+    est.fit(data)
+    # assert hasattr(est, "is_fitted_")
 
     X = data[0]
-    y_pred = est.predict(X)
-    assert_array_equal(y_pred, np.ones(X.shape[0], dtype=np.int64))
+    # assert_array_equal(y_pred, np.ones(X.shape[0], dtype=np.int64))

@@ -1,4 +1,4 @@
-name: project-template
+name: analysisEM
 dependencies:
   - numpy
   - scipy

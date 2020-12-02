@@ -3,6 +3,7 @@ This is a module to be used as a reference for building other modules
 """
 import numpy as np
 import pandas as pd
+import xarray as xr
 import scipy.linalg
 
 import warnings
@@ -10,8 +11,36 @@ from time import time
 
 from sklearn.base import BaseEstimator, DensityMixin
 from sklearn.utils.validation import check_is_fitted
-from sklearn.utils import check_random_state
+from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
+
+
+def transformTraj(X, dt, dim_x, force):
+    """
+    From a flat array compute everythong that is needed for the follwoing computation
+    """
+    traj_list = []
+    for trj in X:
+        x = trj.reshape(-1, dim_x)
+        tps = dt * np.arange(x.shape[0])
+        v = (np.roll(x, -1, axis=0) - x) / dt
+        xv_np = np.hstack((x, v))
+        xhalf = xr.DataArray(x + 0.5 * dt * v, coords={"t": tps}, dims=["t", "space"])
+        bk = xr.apply_ufunc(lambda x, fb: fb(x), xhalf, kwargs={"fb": force}, input_core_dims=[["space"]], output_core_dims=[["space"]], vectorize=True)
+
+        projmat = np.zeros((dim_x, 2 * dim_x))
+        projmat[:dim_x, :dim_x] = 0.5 * dt / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
+        projmat[:dim_x, dim_x : 2 * dim_x] = 1.0 / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
+
+        P = projmat.copy()
+        P[:dim_x, dim_x : 2 * dim_x] = (1 + ((0.5 * dt) ** 2 / (1 + (0.5 * dt) ** 2))) * np.identity(dim_x)
+        xv_plus_proj = (np.matmul(projmat, np.roll(xv_np, -1, axis=0).T)).T
+        xv_proj = np.matmul(P, xv_np.T).T
+
+        xv = xr.Dataset({"xv_plus_proj": (["t", "dim_x"], xv_plus_proj), "xv_proj": (["t", "dim_x"], xv_proj), "v": (["t", "dim_x"], v), "bk": (["t", "dim_x"], bk)}, coords={"t": tps})
+        xv.attrs["lenTraj"] = x.shape[0]
+        traj_list.append(xv)
+    return traj_list
 
 
 def generateRandomDefPosMat(dim_tot=2, rng=np.random.default_rng()):
@@ -98,26 +127,24 @@ def smoothing_rauch(muft, Sigft, muStp, SigStp, Xtplus, mutilde_t, expAh, SST, d
     return marg_mu, marg_sig, mu_pair, Sig_pair
 
 
-def sufficient_stats(traj, dim_tot, dim_force):
+def sufficient_stats(traj, dim_x, dim_force):
     """
-    Given a sample of trajectory, compute the averaged values over h of the sufficient statistics
+    Given a sample of trajectory, compute the averaged values of the sufficient statistics
     """
 
-    diff_h = np.roll(traj["hidden"]["h"].values, -1, axis=0) - traj["hidden"]["h"].values
-    diffs_xv = traj["xv"]["xv_plus_proj"].values - traj["xv"]["xv_proj"].values
-    diffs = np.hstack((diffs_xv, diff_h))
+    diffs = traj["xv_plus_proj"].values - traj["xv_proj"].values
 
-    x_val_proj = np.hstack((traj["xv"]["v"], traj["hidden"]["h"]))
+    x_val_proj = traj["v"].values
 
-    xx = np.zeros((dim_tot, dim_tot))
+    xx = np.zeros((dim_x, dim_x))
     xdx = np.zeros_like(xx)
     dxdx = np.zeros_like(xx)
-    bkx = np.zeros((dim_force, dim_tot))
+    bkx = np.zeros((dim_force, dim_x))
     bkdx = np.zeros_like(bkx)
     bkbk = np.zeros((dim_force, dim_force))
 
-    bk = traj["force"]["bk"].data
-    lenTraj = traj["lenTrajs"]
+    bk = traj["bk"].data
+    lenTraj = traj.attrs["lenTraj"]
     for i in range(lenTraj - 1):  # The -1 comes from the last values removed
         xx += np.outer(x_val_proj[i], x_val_proj[i])
         xdx += np.outer(x_val_proj[i], diffs[i])
@@ -137,23 +164,23 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force)
     dim_tot = dim_x + dim_h
 
     xx = np.zeros((dim_tot, dim_tot))
-    xx[:dim_x, :dim_x] = old_stats["xx"][:dim_x, :dim_x]
+    xx[:dim_x, :dim_x] = old_stats["xx"]
     xdx = np.zeros_like(xx)
-    xdx[:dim_x, :dim_x] = old_stats["xdx"][:dim_x, :dim_x]
+    xdx[:dim_x, :dim_x] = old_stats["xdx"]
     dxdx = np.zeros_like(xx)
-    dxdx[:dim_x, :dim_x] = old_stats["dxdx"][:dim_x, :dim_x]
+    dxdx[:dim_x, :dim_x] = old_stats["dxdx"]
     bkx = np.zeros((dim_force, dim_tot))
-    bkx[:, :dim_x] = old_stats["bkx"][:, :dim_x]
+    bkx[:, :dim_x] = old_stats["bkx"]
     bkdx = np.zeros_like(bkx)
-    bkdx[:, :dim_x] = old_stats["bkdx"][:, :dim_x]
+    bkdx[:, :dim_x] = old_stats["bkdx"]
 
-    bk = traj["force"]["bk"].data
+    bk = traj["bk"].data
 
-    diffs_xv = traj["xv"]["xv_plus_proj"].values - traj["xv"]["xv_proj"].values
+    diffs_xv = traj["xv_plus_proj"].values - traj["xv_proj"].values
 
-    x_val_proj = traj["xv"]["v"].values
+    x_val_proj = traj["v"].values
 
-    lenTraj = traj["lenTrajs"]
+    lenTraj = traj.attrs["lenTraj"]
 
     for i in range(lenTraj - 1):  # The -1 comes from the last values removed
         # print(muh[i, dim_h:])
@@ -228,7 +255,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     tol : float, defaults to 1e-3.
         The convergence threshold. EM iterations will stop when the lower bound average gain is below this threshold.
 
-    max_niter: int, default=100
+    max_iter: int, default=100
         The maximum number of EM iterations
 
 
@@ -245,6 +272,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             'markov' : coefficients are initialized using markovian approximation.
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
+
+    force : callable, default to -0.5*x
+        Evaluation of the force field at x
 
     A_init, C_init : array, optional
         The user-provided initial coefficients, defaults to None.
@@ -277,27 +307,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     verbose_interval : int, default to 10.
         Number of iteration done before the next print.
 
-    Examples
-    --------
-    >>> from analysisEM import GLE_Estimator
-    >>> import numpy as np
-    >>> X = np.arange(100).reshape(100, 1)
-    >>> estimator = GLE_Estimator()
-    >>> estimator.fit(X)
     """
 
-    def __init__(self, dt=5e-3, dim_x=1, dim_h=1, tol=1e-3, max_iter=100, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", A_init=None, C_init=None, n_init=1, random_state=None, warm_start=False, verbose=0, verbose_interval=10):
+    def __init__(self, dt=5e-3, dim_x=1, dim_h=1, tol=1e-3, max_iter=100, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", force=lambda x: -0.5 * x, A_init=None, C_init=None, n_init=1, random_state=None, warm_start=False, verbose=0, verbose_interval=10):
         self.dt = dt
-        self.haldt = 0.5 * dt
-        self.dim_h = dim_h
-        self.dim_coeffs_force = self.dim_x
-        self.coeffs_force = np.identity(self.dim_x)
-
         self.dim_x = dim_x
+        self.dim_h = dim_h
 
         self.OptimizeDiffusion = OptimizeDiffusion
         self.EnforceFDT = EnforceFDT
 
+        self.force = force
         self.A_init = A_init
         self.C_init = C_init
 
@@ -311,12 +331,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.verbose = verbose
         self.verbose_interval = verbose_interval
 
-    def _check_initial_parameters(self, X):
+    def _check_initial_parameters(self):
         """Check values of the basic parameters.
-        Parameters
-        ----------
-        X : array-like, shape (n_samples, n_features)
         """
+        if self.dt <= 0.0:
+            raise ValueError("Invalid value for 'dt': %d " "Timestep should be positive" % self.dt)
         if self.dim_h < 1:
             raise ValueError("Invalid value for 'dim_h': %d " "Estimation requires at least one hidden dimension" % self.dim_h)
         if self.tol < 0.0:
@@ -342,7 +361,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
 
-    def _initialize_parameters(self, X, random_state):
+        self.dim_coeffs_force = self.dim_x
+        self.coeffs_force = np.identity(self.dim_x)
+
+    def _initialize_parameters(self, random_state):
         """Initialize the model parameters.
         Parameters
         ----------
@@ -379,40 +401,43 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         -------
         self
         """
-        self._check_initial_parameters(X)
-
+        self._check_initial_parameters()
+        X = check_array(X, ensure_min_features=5)
+        traj_list = transformTraj(np.real(X), self.dt, self.dim_x, self.force)
+        # print(traj_list)
         # if we enable warm_start, we will have a unique initialisation
         do_init = not (self.warm_start and hasattr(self, "converged_"))
         n_init = self.n_init if do_init else 1
 
-        max_lower_bound = np.infty
+        max_lower_bound = -np.infty
         self.converged_ = False
 
         random_state = check_random_state(self.random_state)
 
-        self.nlogL = np.zeros((n_init, self.max_niter))
+        self.nlogL = np.zeros((n_init, self.max_iter))
+        best_params = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h)}
+        best_n_iter = 1
 
         # Initial evalution of the sufficient statistics for observables
         datas = 0.0
-        for traj in X:
-            # computeForce(traj, init_param, global_param) # To be done before by transform
-            datas += sufficient_stats(traj, self.dim_x + self.dim_h, self.dim_coeffs_force) / len(X)
+        for traj in traj_list:
+            datas += sufficient_stats(traj, self.dim_x, self.dim_coeffs_force) / len(traj_list)
 
         for init in range(n_init):
             self._print_verbose_msg_init_beg(init)
 
             if do_init:
-                self._initialize_parameters(X, random_state)
+                self._initialize_parameters(random_state)
 
             lower_bound = np.infty if do_init else self.lower_bound_
             # Algorithm loop
-            for n_iter in range(1, self.max_niter + 1):
+            for n_iter in range(1, self.max_iter + 1):
                 prev_lower_bound = lower_bound
                 new_stat = 0.0
                 # hidenS = 0.0
-                for traj in X:
+                for traj in traj_list:
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-                    new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(X)
+                    new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
                     # hidenS += hidden_entropy(traj, global_param)
                 self._m_step(new_stat)
 
@@ -425,7 +450,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     self.converged_ = True
                     break
             self._print_verbose_msg_init_end(lower_bound)
-            if lower_bound < max_lower_bound:
+            if lower_bound > max_lower_bound:
                 max_lower_bound = lower_bound
                 best_params = self._get_parameters()
                 best_n_iter = n_iter
@@ -443,12 +468,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Compute the value of mutilde and Xtplus
         """
-        Xt = traj["xv"]["xv_proj"].values
-        Xtplus = traj["xv"]["xv_plus_proj"].values
-        Vt = traj["xv"]["v"].values
-        bkt = traj["force"]["bk"].values
+        Xt = traj["xv_proj"].values
+        Xtplus = traj["xv_plus_proj"].values
+        Vt = traj["v"].values
+        bkt = traj["bk"].values
         Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = self.halfdt * np.identity(self.dim_x)
+        Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
 
         mutilde = (np.matmul(np.identity(self.dim_x + self.dim_h)[:, : self.dim_x], Xt.T - Vt.T) + np.matmul(self.expA[:, : self.dim_x], Vt.T) + np.matmul(self.expA + np.identity(self.dim_x + self.dim_h), np.matmul(Pf, bkt.T))).T
 
@@ -468,13 +493,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Covariances of the pair of the hidden variables
         """
         # Initialize, we are going to use a numpy array for storing intermediate values and put the resulting µh and \Sigma_h into the xarray only at the end
-        muf = np.zeros((traj["lenTrajs"], self.dim_h))
-        Sigf = np.zeros((traj["lenTrajs"], self.dim_h, self.dim_h))
-        mus = np.zeros((traj["lenTrajs"], self.dim_h))
-        Sigs = np.zeros((traj["lenTrajs"], self.dim_h, self.dim_h))
+        lenTraj = traj.attrs["lenTraj"]
+        muf = np.zeros((lenTraj, self.dim_h))
+        Sigf = np.zeros((lenTraj, self.dim_h, self.dim_h))
+        mus = np.zeros((lenTraj, self.dim_h))
+        Sigs = np.zeros((lenTraj, self.dim_h, self.dim_h))
         # To store the pair probability distibution
-        muh = np.zeros((traj["lenTrajs"], 2 * self.dim_h))
-        Sigh = np.zeros((traj["lenTrajs"], 2 * self.dim_h, 2 * self.dim_h))
+        muh = np.zeros((lenTraj, 2 * self.dim_h))
+        Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
 
         Xtplus, mutilde = self._compute_expectation_estep(traj)
 
@@ -484,7 +510,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         muf[0, :] = np.zeros((self.dim_h,))  # Initialize with Z_0 = 0.
         Sigf[0, :, :] = np.zeros((self.dim_h, self.dim_h))
         # Iterate and compute possible value for h at the same point
-        for i in range(1, traj["lenTrajs"]):
+        for i in range(1, lenTraj):
             muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.expA[:, self.dim_x :], self.SST, self.dim_x, self.dim_h)
 
         # The last step comes only from the forward recursion
@@ -494,7 +520,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # Backward proba
         if self.verbose >= 2:
             print("## Backward ##")
-        for i in range(traj["lenTrajs"] - 2, -1, -1):  # From T-1 to 0
+        for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
             mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.expA[:, self.dim_x :], self.SST, self.dim_x, self.dim_h)
 
         return muh, Sigh
@@ -502,7 +528,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _m_step(self, sufficient_stat):
         """M step."""
         Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = self.halfdt * np.identity(self.dim_x)
+        Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
 
         bkbk = np.matmul(Pf, np.matmul(np.matmul(self.coeffs_force, np.matmul(sufficient_stat["bkbk"], self.coeffs_force.T)), Pf.T))
         bkdx = np.matmul(Pf, np.matmul(self.coeffs_force, sufficient_stat["bkdx"]))
@@ -538,7 +564,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Return the current value of the negative log-likelihood
         """
         Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = self.halfdt * np.identity(self.dim_x)
+        Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
 
         bkbk = np.matmul(Pf, np.matmul(np.matmul(self.coeffs_force, np.matmul(suff_datas["bkbk"], self.coeffs_force.T)), Pf.T))
         bkdx = np.matmul(Pf, np.matmul(self.coeffs_force, suff_datas["bkdx"]))
@@ -563,14 +589,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Log likelihood of the Gaussian mixture given X.
         """
         check_is_fitted(self)
+        # print(X.shape)
+        X = check_array(X, ensure_min_features=4, allow_nd=True)
+        traj_list = transformTraj(X, self.dt, self.dim_x, self.force)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
         # hidenS = 0.0
-        for traj in X:
+        for traj in traj_list:
             # computeForce(traj, init_param, global_param) # To be done before by transform
-            datas = sufficient_stats(traj, self.dim_x + self.dim_h, self.dim_coeffs_force) / len(X)
+            datas = sufficient_stats(traj, self.dim_x, self.dim_coeffs_force) / len(traj_list)
             muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-            new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(X)
+            new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
             # hidenS += hidden_entropy(traj, global_param)
         return self.loglikelihood(new_stat)  # +hidenS
 
@@ -641,7 +670,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """Print verbose message on initialization."""
         if n_iter % self.verbose_interval == 0:
             if self.verbose == 1:
-                print("***Iteration EM*** : {} / {} --- Current loglikelihood {}".format(n_iter, self.max_niter, log_likelihood))
+                print("***Iteration EM*** : {} / {} --- Current loglikelihood {}".format(n_iter, self.max_iter, log_likelihood))
             elif self.verbose >= 2:
                 cur_time = time()
                 print("  Iteration %d\t time lapse %.5fs\t ll change %.5f" % (n_iter, cur_time - self._iter_prev_time, diff_ll))

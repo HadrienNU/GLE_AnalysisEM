@@ -1,10 +1,10 @@
 ####################
-project-template API
+GLE_AnalysisEM API
 ####################
 
 This is an example on how to document the API of your own project.
 
-.. currentmodule:: skltemplate
+.. currentmodule:: analysisEM
 
 Estimator
 =========
@@ -13,7 +13,7 @@ Estimator
    :toctree: generated/
    :template: class.rst
 
-   TemplateEstimator
+   GLE_Estimator
 
 Transformer
 ===========
@@ -22,13 +22,5 @@ Transformer
    :toctree: generated/
    :template: class.rst
 
-   TemplateTransformer
+   GLE_Transformer
 
-Predictor
-=========
-
-.. autosummary::
-   :toctree: generated/
-   :template: class.rst
-
-    TemplateClassifier
