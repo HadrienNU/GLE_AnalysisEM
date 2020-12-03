@@ -4,7 +4,7 @@ GLE_AnalysisEM API
 
 This is an example on how to document the API of your own project.
 
-.. currentmodule:: analysisEM
+.. currentmodule:: GLE_analysisEM
 
 Estimator
 =========

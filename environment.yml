@@ -1,4 +1,4 @@
-name: analysisEM
+name: GLE_analysisEM
 dependencies:
   - numpy
   - scipy

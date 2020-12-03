@@ -15,10 +15,11 @@ from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
 
-def transformTraj(X, dt, dim_x, force):
+def preprocessingTraj(X, dt, dim_x, force):
     """
     From a flat array compute everythong that is needed for the follwoing computation
     """
+    X = check_array(X, ensure_min_features=4, allow_nd=True)
     traj_list = []
     for trj in X:
         x = trj.reshape(-1, dim_x)
@@ -331,6 +332,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.verbose = verbose
         self.verbose_interval = verbose_interval
 
+    def _more_tags(self):
+        return {"X_types": list}
+
     def _check_initial_parameters(self):
         """Check values of the basic parameters.
         """
@@ -364,7 +368,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.dim_coeffs_force = self.dim_x
         self.coeffs_force = np.identity(self.dim_x)
 
-    def _initialize_parameters(self, random_state):
+    def _initialize_parameters(self, suff_stats_visibles, random_state):
         """Initialize the model parameters.
         Parameters
         ----------
@@ -383,6 +387,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             (self.expA, self.SST) = convert_user_coefficients(self.dt, A, C)
         elif self.init_params == "user":
             (self.expA, self.SST) = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+        elif self.init_params == "markov":
+            self._m_step(suff_stats_visibles)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
 
@@ -402,8 +408,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self
         """
         self._check_initial_parameters()
-        X = check_array(X, ensure_min_features=5)
-        traj_list = transformTraj(np.real(X), self.dt, self.dim_x, self.force)
+        traj_list = preprocessingTraj(np.real(X), self.dt, self.dim_x, self.force)
         # print(traj_list)
         # if we enable warm_start, we will have a unique initialisation
         do_init = not (self.warm_start and hasattr(self, "converged_"))
@@ -419,15 +424,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         best_n_iter = 1
 
         # Initial evalution of the sufficient statistics for observables
-        datas = 0.0
+        datas_visible = 0.0
         for traj in traj_list:
-            datas += sufficient_stats(traj, self.dim_x, self.dim_coeffs_force) / len(traj_list)
+            datas_visible += sufficient_stats(traj, self.dim_x, self.dim_coeffs_force) / len(traj_list)
 
         for init in range(n_init):
             self._print_verbose_msg_init_beg(init)
 
             if do_init:
-                self._initialize_parameters(random_state)
+                self._initialize_parameters(datas_visible, random_state)
 
             lower_bound = np.infty if do_init else self.lower_bound_
             # Algorithm loop
@@ -437,7 +442,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 # hidenS = 0.0
                 for traj in traj_list:
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-                    new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+                    new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
                     # hidenS += hidden_entropy(traj, global_param)
                 self._m_step(new_stat)
 
@@ -590,8 +595,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         check_is_fitted(self)
         # print(X.shape)
-        X = check_array(X, ensure_min_features=4, allow_nd=True)
-        traj_list = transformTraj(X, self.dt, self.dim_x, self.force)
+        traj_list = preprocessingTraj(X, self.dt, self.dim_x, self.force)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
         # hidenS = 0.0

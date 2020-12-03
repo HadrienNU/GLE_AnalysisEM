@@ -2,8 +2,8 @@
 
 [run]
 branch = True
-source = analysisEM
-include = */analysisEM/*
+source = GLE_analysisEM
+include = */GLE_analysisEM/*
 omit =
     */setup.py
 

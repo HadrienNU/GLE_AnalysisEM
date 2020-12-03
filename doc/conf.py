@@ -75,9 +75,9 @@ copyright = u"2020, MAESTRO"
 # built documents.
 #
 # The short X.Y version.
-# from analysisEM import __version__
+from GLE_analysisEM import __version__
 #
-# version = __version__
+version = __version__
 # # The full version, including alpha/beta/rc tags.
 # release = __version__
 
@@ -286,7 +286,7 @@ intersphinx_mapping = {
 }
 
 # sphinx-gallery configuration
-sphinx_gallery_conf = {"doc_module": "analysisEM", "backreferences_dir": os.path.join("generated"), "reference_url": {"analysisEM": None}}
+sphinx_gallery_conf = {"doc_module": "GLE_analysisEM", "backreferences_dir": os.path.join("generated"), "reference_url": {"GLE_analysisEM": None}}
 
 
 def setup(app):

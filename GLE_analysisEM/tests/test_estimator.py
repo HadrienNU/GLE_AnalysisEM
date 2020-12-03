@@ -4,12 +4,12 @@ import numpy as np
 # from sklearn.utils import assert_array_equal
 # from sklearn.utils import assert_allclose
 
-from analysisEM import GLE_Estimator
+from GLE_analysisEM import GLE_Estimator
 
 
 @pytest.fixture
 def data():
-    return np.loadtxt("analysisEM/tests/test_traj.dat").reshape(1, -1)
+    return np.loadtxt("GLE_analysisEM/tests/test_traj.dat").reshape(1, -1)
 
 
 def test_em_estimator_n_iter(data):
@@ -22,11 +22,11 @@ def test_em_estimator_n_iter(data):
 
 
 def test_em_estimator(data):
-    est = GLE_Estimator()
+    est = GLE_Estimator(verbose=1)
     assert est.dt == 5e-3
 
     est.fit(data)
     # assert hasattr(est, "is_fitted_")
 
-    X = data[0]
+    # X = data[0]
     # assert_array_equal(y_pred, np.ones(X.shape[0], dtype=np.int64))
