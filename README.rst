@@ -19,3 +19,6 @@ GLE_AnalysisEM - A estimator for Generalized Langevin Equation
 **GLE_AnalysisEM** is a scikit-learn_ compatible estimator.
 
 Statistical inference of Generalized Langevin Equation using Expectation-Maximization algorithm
+
+
+Note personnelle: Le module est juste installé via un lien symbolique dans ~/.local/lib/python3.8/site-packages/GLE_analysisEM
