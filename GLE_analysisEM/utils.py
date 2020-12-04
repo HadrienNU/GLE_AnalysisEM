@@ -160,6 +160,16 @@ def memory_kernel(ntimes, dt, coeffs, dim_x):
     Ahh = coeffs["A"][dim_x:, dim_x:]
     Kernel = np.zeros((ntimes, dim_x, dim_x))
     for n in range(ntimes):
-        Kernel[n, :, :] = np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * n * dt * Ahh), Ahv))
-    Kernel[0, :, :] += Avv
+        Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * n * dt * Ahh), Ahv))
+    Kernel[0, :, :] += 2 * Avv
     return dt * np.arange(ntimes), Kernel
+
+
+def xcorr(x):
+    """FFT based autocorrelation function, which is faster than numpy.correlate"""
+    from numpy.fft import fft, ifft
+
+    # x is supposed to be an array of sequences, of shape (totalelements, length)
+    fftx = fft(x, axis=0)
+    ret = ifft(fftx * np.conjugate(fftx), axis=0)
+    return ret

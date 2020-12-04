@@ -118,7 +118,7 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force)
     xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
     dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
 
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"]})
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:]})
 
 
 def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, invSST, dim_tot):
@@ -129,18 +129,19 @@ def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, invSST, dim_t
     expA = theta.reshape((dim_tot, dim_tot))
     deriv_expA = np.zeros_like(theta)
     # k is the chosen derivative
-    YY = dxdx - xdx.T - xdx - 2 * (bkdx + bkdx.T) + xx + 2 * (bkx + bkx.T) + 4 * bkbk
+    YY = dxdx - 2 * (bkdx + bkdx.T) + 4 * bkbk
     YX = xdx.T - 2 * bkx + bkdx.T - 2 * bkbk
     XX = xx + bkx + bkx.T + bkbk
-
-    combYX = YY + np.matmul(expA - np.identity(dim_tot), np.matmul(XX, expA.T - np.identity(dim_tot))) - np.matmul(YX, expA.T - np.identity(dim_tot)) - np.matmul(YX, expA.T - np.identity(dim_tot)).T
+    Id = np.identity(dim_tot)
+    invSSTexpA = np.linalg.inv(Id - np.matmul(expA, expA.T))
+    combYX = YY + np.matmul(expA - Id, np.matmul(XX, expA.T - Id)) - np.matmul(YX, expA.T - Id) - np.matmul(YX, expA.T - Id).T
 
     for k in range(dim_tot ** 2):
-        DA_flat = np.zeros((dim_tot ** 2,))
-        DA_flat[k] = 1.0
-        DA = DA_flat.reshape((dim_tot, dim_tot))
-        deriv_expA[k] = 2 * np.trace(np.matmul(invSST, np.matmul(np.matmul(expA, np.identity(dim_tot) - np.matmul(combYX, invSST)), DA.T)))
-        deriv_expA[k] += np.trace(np.matmul(invSST, np.matmul(YX - np.matmul(expA - np.identity(dim_tot), XX), DA.T)))
+        DexpA_flat = np.zeros((dim_tot ** 2,))
+        DexpA_flat[k] = 1.0
+        DexpA = DexpA_flat.reshape((dim_tot, dim_tot))
+        deriv_expA[k] = 2 * np.trace(np.matmul(invSST, np.matmul(np.matmul(expA, Id - np.matmul(combYX, invSSTexpA)), DexpA.T)))
+        deriv_expA[k] += np.trace(np.matmul(invSST, np.matmul(YX - np.matmul(expA - Id, XX), DexpA.T)))
     return deriv_expA
 
 
@@ -159,7 +160,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     dim_h : int, default=1
         The number of hidden dimensions
 
-    tol : float, defaults to 1e-2.
+    tol : float, defaults to 1e-3.
         The convergence threshold. EM iterations will stop when the lower bound average gain is below this threshold.
 
     max_iter: int, default=100
@@ -180,10 +181,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
 
-    force : callable, default to -0.5*x
+    force : callable, default to lambda x: -1.0*x
         Evaluation of the force field at x
 
-    A_init, C_init : array, optional
+    A_init, C_init, mu_init, sig_init: array, optional
         The user-provided initial coefficients, defaults to None.
         If it None, coefficients are initialized using the `init_params` method.
 
@@ -219,7 +220,28 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     """
 
-    def __init__(self, dt=5e-3, dim_x=1, dim_h=1, tol=1e-2, max_iter=100, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", force=lambda x: -1.0 * x, A_init=None, C_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10):
+    def __init__(
+        self,
+        dt=5e-3,
+        dim_x=1,
+        dim_h=1,
+        tol=1e-3,
+        max_iter=100,
+        OptimizeDiffusion=True,
+        EnforceFDT=False,
+        init_params="random",
+        force=lambda x: -1.0 * x,
+        A_init=None,
+        C_init=None,
+        mu_init=None,
+        sig_init=None,
+        n_init=1,
+        random_state=None,
+        warm_start=False,
+        no_stop=False,
+        verbose=0,
+        verbose_interval=10,
+    ):
         self.dt = dt
         self.dim_x = dim_x  # Il faudrait le calculer dans _check_initial_parameters plutôt
         self.dim_h = dim_h
@@ -228,8 +250,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.EnforceFDT = EnforceFDT
 
         self.force = force
+
         self.A_init = A_init
         self.C_init = C_init
+        self.mu_init = mu_init
+        self.sig_init = sig_init
 
         self.tol = tol
         self.max_iter = max_iter
@@ -265,6 +290,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
             if self.A_init is None:
                 raise ValueError("No initial values for A is provided and init_params is set to user defined")
+            # if self.mu_init is None or self.sig_init is None:
+            #     raise ValueError("No initial values for initial conditions are provided and init_params is set to user defined")
 
         if self.A_init is not None:
             if self.C_init is None:
@@ -276,8 +303,33 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
 
+        if self.mu_init is not None:
+            if self.mu_init.shape != (self.dim_h,):
+                raise ValueError("Provided user values for initial mean of hidden variables have wrong shape, provided {}, wanted {}".format(self.mu_init.shape, (self.dim_h,)))
+
+        if self.sig_init is not None:
+            if self.sig_init.shape != (self.dim_h, self.dim_h):
+                raise ValueError("Provided user values for initial variance of hidden variables have wrong shape, provided {}, wanted {}".format(self.sig_init.shape, (self.dim_h, self.dim_h)))
+            if not np.all(np.linalg.eigvals(self.sig_init) >= 0):
+                raise ValueError("Provided user values for initial variance of hidden variables is not a definite positive diffusion matrix")
+
         self.dim_coeffs_force = self.dim_x
         self.coeffs_force = np.identity(self.dim_x)
+
+    def set_init_coeffs(self, coeffs):
+        """ Set the initial values of the coefficients via a dict
+        Parameters
+        ----------
+        coeffs : dict
+        Contains the wanted values of the initial coefficients,
+        if a key is absent the coefficients is set to None
+        """
+        keys_coeffs = ["A", "C", "µ_0", "Σ_0"]
+        init_coeffs = [None] * len(keys_coeffs)
+        for n, key in enumerate(keys_coeffs):
+            if key in coeffs:
+                init_coeffs[n] = coeffs[key]
+        self.A_init, self.C_init, self.mu_init, self.sig_init = init_coeffs
 
     def _initialize_parameters(self, suff_stats_visibles, random_state):
         """Initialize the model parameters.
@@ -291,11 +343,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.init_params == "random":
             A = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
             if self.EnforceFDT:
-                C = random_state.standard_exponential() * np.identity(self.dim_x + self.dim_h) / (self.dim_x + self.dim_h)
+                C = np.identity(self.dim_x + self.dim_h) / (self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
                 if self.C_init is None:
-                    temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
-                    C = temp_mat + temp_mat.T
+                    # temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
+                    # C = temp_mat + temp_mat.T
+                    C = np.identity(self.dim_x + self.dim_h)
                 else:
                     C = self.C_init
             (self.expA, self.SST) = convert_user_coefficients(self.dt, A, C)
@@ -305,6 +358,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self._m_step(suff_stats_visibles)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
+        if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
+            _, self.SST = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+        # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
+        if self.mu_init is not None:
+            self.mu0 = self.mu_init
+        else:
+            self.mu0 = np.zeros((self.dim_h))
+        if self.sig_init is not None:
+            self.sig0 = self.sig_init
+        else:
+            self.sig0 = np.identity(self.dim_h)
 
     def fit(self, X, y=None):
         """Estimate model parameters with the EM algorithm.
@@ -333,8 +397,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         random_state = check_random_state(self.random_state)
 
-        self.nlogL = np.zeros((n_init, self.max_iter))
-        best_params = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h)}
+        self.logL = np.zeros((n_init, self.max_iter))
+        best_params = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
         best_n_iter = -1
 
         # Initial evalution of the sufficient statistics for observables
@@ -361,7 +425,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 self._m_step(new_stat)
 
                 lower_bound = self.loglikelihood(new_stat)
-                self.nlogL[init, n_iter - 1] = lower_bound
+                self.logL[init, n_iter - 1] = lower_bound
                 change = lower_bound - prev_lower_bound
                 self._print_verbose_msg_iter_end(n_iter, change, lower_bound)
 
@@ -427,8 +491,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.verbose >= 4:
             print("## Forward ##")
         # Forward Proba
-        muf[0, :] = np.zeros((self.dim_h,))  # Initialize with Z_0 = 0.
-        Sigf[0, :, :] = np.zeros((self.dim_h, self.dim_h))
+        muf[0, :] = self.mu0
+        Sigf[0, :, :] = self.sig0
         # Iterate and compute possible value for h at the same point
         for i in range(1, lenTraj):
             muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.expA[:, self.dim_x :], self.SST, self.dim_x, self.dim_h)
@@ -470,7 +534,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 print(sol)
                 raise ValueError("M step did not converge")
             self.expA = sol.x.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-
         # Optimize based on  the variance of the sufficients statistics
         if self.OptimizeDiffusion:
             residuals = sufficient_stat["dxdx"] - np.matmul(self.expA - Id, sufficient_stat["xdx"]) - np.matmul(self.expA - Id, sufficient_stat["xdx"]).T - np.matmul(self.expA + Id, bkdx) - np.matmul(self.expA + Id, bkdx).T
@@ -481,6 +544,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 self.SST = kbT * (Id - np.matmul(self.expA, self.expA.T))
             else:  # In which case we optimize the full diffusion matrix
                 self.SST = residuals
+        self.mu0 = sufficient_stat["µ_0"]
+        self.sig0 = sufficient_stat["Σ_0"]
 
     def loglikelihood(self, suff_datas):
         """
@@ -514,7 +579,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         log_likelihood : float
             Log likelihood of the Gaussian mixture given X.
         """
-        check_is_fitted(self)
+        check_is_fitted(self, "converged_")
 
         traj_list = preprocessingTraj(X, self.dt, self.dim_x, self.force)
         # Initial evalution of the sufficient statistics for observables
@@ -539,7 +604,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         labels : array, shape (n_samples,)
             Component labels.
         """
-        check_is_fitted(self)
+        check_is_fitted(self, "converged_")
         traj_list = preprocessingTraj(X, self.dt, self.dim_x, self.force)
         muh_out = None
         for traj in traj_list:
@@ -563,22 +628,23 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         y : array, shape (nsamples,)
             Component labels
         """
-        check_is_fitted(self)
+        check_is_fitted(self, "converged_")
         raise NotImplementedError
 
     def _get_parameters(self):
         A, C = convert_local_coefficients(self.dt, self.expA, self.SST)
-        return {"A": A, "C": C}
+        return {"A": A, "C": C, "µ_0": self.mu0, "Σ_0": self.sig0}
 
     def _set_parameters(self, params):
         (self.expA, self.SST) = convert_user_coefficients(self.dt, params["A"], params["C"])
+        (self.mu0, self.sig0) = (params["µ_0"], params["Σ_0"])
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
         if self.EnforceFDT:
-            return (self.dim_x + self.dim_h) ** 2 + 1
+            return (self.dim_x + self.dim_h) ** 2 + 1 + self.dim_h + self.dim_h ** 2
         else:
-            return 2 * (self.dim_x + self.dim_h) ** 2
+            return 2 * (self.dim_x + self.dim_h) ** 2 + self.dim_h + self.dim_h ** 2
 
     def bic(self, X):
         """Bayesian information criterion for the current model on the input X.
