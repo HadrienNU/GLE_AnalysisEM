@@ -26,7 +26,7 @@ def test_markov_input(data):
     est = GLE_Estimator(init_params="markov")
 
 
-def test_m_step(data):
+def test_m_step_aboba(data):
     est = GLE_Estimator()
     est._check_initial_parameters()
     time, traj_list_x, traj_list_v, traj_list_h = loadTestDatas_est(data, {"dim_x": 1, "dim_h": 1})
@@ -44,7 +44,7 @@ def test_m_step(data):
     assert logL2 > logL1
 
 
-def test_e_step(data):
+def test_e_step_aboba(data):
 
     est = GLE_Estimator(C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), init_params="user")
     est._check_initial_parameters()

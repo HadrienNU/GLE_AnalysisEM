@@ -14,6 +14,7 @@ from sklearn.utils import check_random_state
 from sklearn.exceptions import ConvergenceWarning
 
 from .utils import generateRandomDefPosMat, preprocessingTraj, filter_kalman, smoothing_rauch
+from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, mle_derivative_expA_FDT
 
 
 def convert_user_coefficients(dt, A, C):
@@ -34,115 +35,18 @@ def convert_local_coefficients(dt, expA, SST):
     return A, C
 
 
-def sufficient_stats(traj, dim_x, dim_force):
-    """
-    Given a sample of trajectory, compute the averaged values of the sufficient statistics
-    """
-
-    diffs = traj["xv_plus_proj"].values - traj["xv_proj"].values
-
-    x_val_proj = traj["v"].values
-
-    xx = np.zeros((dim_x, dim_x))
-    xdx = np.zeros_like(xx)
-    dxdx = np.zeros_like(xx)
-    bkx = np.zeros((dim_force, dim_x))
-    bkdx = np.zeros_like(bkx)
-    bkbk = np.zeros((dim_force, dim_force))
-
-    bk = traj["bk"].data
-    lenTraj = traj.attrs["lenTraj"]
-    for i in range(lenTraj - 1):  # The -1 comes from the last values removed
-        xx += np.outer(x_val_proj[i], x_val_proj[i])
-        xdx += np.outer(x_val_proj[i], diffs[i])
-        dxdx += np.outer(diffs[i], diffs[i])
-        bkx += np.outer(bk[i], x_val_proj[i])
-        bkdx += np.outer(bk[i], diffs[i])
-        bkbk += np.outer(bk[i], bk[i])
-
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk}) / (lenTraj - 1)
+def sufficient_stats(traj, dim_x, dim_force, model="ABOBA"):
+    if model == "ABOBA":
+        return sufficient_stats_aboba(traj, dim_x, dim_force)
+    else:
+        raise ValueError("Model {} not implemented".format(model))
 
 
-def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force):
-    """
-    Compute the sufficient statistics averaged over the hidden variable distribution
-    """
-
-    dim_tot = dim_x + dim_h
-
-    xx = np.zeros((dim_tot, dim_tot))
-    xx[:dim_x, :dim_x] = old_stats["xx"]
-    xdx = np.zeros_like(xx)
-    xdx[:dim_x, :dim_x] = old_stats["xdx"]
-    dxdx = np.zeros_like(xx)
-    dxdx[:dim_x, :dim_x] = old_stats["dxdx"]
-    bkx = np.zeros((dim_force, dim_tot))
-    bkx[:, :dim_x] = old_stats["bkx"]
-    bkdx = np.zeros_like(bkx)
-    bkdx[:, :dim_x] = old_stats["bkdx"]
-
-    bk = traj["bk"].data
-
-    diffs_xv = traj["xv_plus_proj"].values - traj["xv_proj"].values
-
-    x_val_proj = traj["v"].values
-
-    lenTraj = traj.attrs["lenTraj"]
-
-    for i in range(lenTraj - 1):  # The -1 comes from the last values removed
-        # print(muh[i, dim_h:])
-        xx[dim_x:, dim_x:] += Sigh[i, dim_h:, dim_h:] + np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        xx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], x_val_proj[i])
-
-        xdx[dim_x:, dim_x:] += Sigh[i, dim_h:, :dim_h] + np.outer(muh[i, dim_h:], muh[i, :dim_h]) - Sigh[i, dim_h:, dim_h:] - np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        xdx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], diffs_xv[i])
-        xdx[:dim_x, dim_x:] += np.outer(x_val_proj[i], muh[i, :dim_h] - muh[i, dim_h:])
-
-        dxdx[dim_x:, dim_x:] += Sigh[i, :dim_h, :dim_h] + np.outer(muh[i, :dim_h], muh[i, :dim_h]) - 2 * Sigh[i, dim_h:, :dim_h] - np.outer(muh[i, dim_h:], muh[i, :dim_h]) - np.outer(muh[i, :dim_h], muh[i, dim_h:]) + Sigh[i, dim_h:, dim_h:] + np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        dxdx[dim_x:, :dim_x] += np.outer(muh[i, :dim_h] - muh[i, dim_h:], diffs_xv[i])
-
-        bkx[:, dim_x:] += np.outer(bk[i], muh[i, dim_h:])
-        bkdx[:, dim_x:] += np.outer(bk[i], muh[i, :dim_h] - muh[i, dim_h:])
-
-    # Normalisation
-    xx[dim_x:, :] /= lenTraj - 1
-
-    xdx[dim_x:, :] /= lenTraj - 1
-    xdx[:dim_x, dim_x:] /= lenTraj - 1
-
-    dxdx[dim_x:, :] /= lenTraj - 1
-
-    bkx[:, dim_x:] /= lenTraj - 1
-    bkdx[:, dim_x:] /= lenTraj - 1
-
-    xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
-    dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
-
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:]})
-
-
-def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, invSST, dim_tot):
-    """
-    Compute the value of the derivative with respect to expA only for the term related to the FDT (i.e. Sigma)
-    TODO
-    """
-    expA = theta.reshape((dim_tot, dim_tot))
-    deriv_expA = np.zeros_like(theta)
-    # k is the chosen derivative
-    YY = dxdx - 2 * (bkdx + bkdx.T) + 4 * bkbk
-    YX = xdx.T - 2 * bkx + bkdx.T - 2 * bkbk
-    XX = xx + bkx + bkx.T + bkbk
-    Id = np.identity(dim_tot)
-    invSSTexpA = np.linalg.inv(Id - np.matmul(expA, expA.T))
-    combYX = YY + np.matmul(expA - Id, np.matmul(XX, expA.T - Id)) - np.matmul(YX, expA.T - Id) - np.matmul(YX, expA.T - Id).T
-
-    for k in range(dim_tot ** 2):
-        DexpA_flat = np.zeros((dim_tot ** 2,))
-        DexpA_flat[k] = 1.0
-        DexpA = DexpA_flat.reshape((dim_tot, dim_tot))
-        deriv_expA[k] = 2 * np.trace(np.matmul(invSST, np.matmul(np.matmul(expA, Id - np.matmul(combYX, invSSTexpA)), DexpA.T)))
-        deriv_expA[k] += np.trace(np.matmul(invSST, np.matmul(YX - np.matmul(expA - Id, XX), DexpA.T)))
-    return deriv_expA
+def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="ABOBA"):
+    if model == "ABOBA":
+        return sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force)
+    else:
+        raise ValueError("Model {} not implemented".format(model))
 
 
 class GLE_Estimator(DensityMixin, BaseEstimator):
