@@ -6,7 +6,8 @@ Plotting GLE Estimator
 An example plot of :class:`GLE_analysisEM.GLE_Estimator`
 """
 import pandas as pd
-from matplotlib import pyplot as plt
+
+# from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator
 from GLE_analysisEM.utils import loadTestDatas_est
 from sklearn.model_selection import train_test_split, GridSearchCV

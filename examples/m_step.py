@@ -1,9 +1,9 @@
 """
 ===========================
-M step, maximum likelihood estimation of the coefficients
+M step
 ===========================
 
-Inner working of the M step :class:`GLE_analysisEM.GLE_Estimator`
+Inner working of the M step,  maximum likelihood estimation of the coefficients :class:`GLE_analysisEM.GLE_Estimator`
 """
 import numpy as np
 import pandas as pd

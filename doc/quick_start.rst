@@ -92,9 +92,8 @@ Publish your package
 ====================
 
 .. _PyPi: https://packaging.python.org/tutorials/packaging-projects/
-.. _conda-foge: https://conda-forge.org/
 
-You can make your package available through PyPi_ and conda-forge_. Refer to
+You can make your package available through PyPi_. Refer to
 the associated documentation to be able to upload your packages such that
 it will be installable with ``pip`` and ``conda``. Once published, it will
 be possible to install your package with the following commands::

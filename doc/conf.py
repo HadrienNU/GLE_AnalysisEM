@@ -61,7 +61,7 @@ source_suffix = ".rst"
 # source_encoding = 'utf-8-sig'
 
 # Generate the plots for the gallery
-plot_gallery = True
+plot_gallery = "True"
 
 # The master toctree document.
 master_doc = "index"
@@ -76,6 +76,7 @@ copyright = u"2020, MAESTRO"
 #
 # The short X.Y version.
 from GLE_analysisEM import __version__
+
 #
 version = __version__
 # # The full version, including alpha/beta/rc tags.

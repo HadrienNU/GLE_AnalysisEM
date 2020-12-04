@@ -22,5 +22,5 @@ Transformer
    :toctree: generated/
    :template: class.rst
 
-   GLE_Transformer
+   GLE_LinearTransformer
 

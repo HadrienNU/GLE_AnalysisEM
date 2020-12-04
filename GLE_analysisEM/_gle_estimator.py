@@ -2,7 +2,6 @@
 This the main estimator module
 """
 import numpy as np
-import pandas as pd
 import scipy.linalg
 
 import warnings
@@ -121,7 +120,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for each step.
     verbose_interval : int, default to 10.
         Number of iteration done before the next print.
-
     """
 
     def __init__(
@@ -222,6 +220,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def set_init_coeffs(self, coeffs):
         """ Set the initial values of the coefficients via a dict
+
         Parameters
         ----------
         coeffs : dict
@@ -237,6 +236,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _initialize_parameters(self, suff_stats_visibles, random_state):
         """Initialize the model parameters.
+
         Parameters
         ----------
         X : array-like, shape  (n_samples, n_features)
@@ -280,11 +280,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         times until the change of likelihood or lower bound is less than
         ``tol``, otherwise, a ``ConvergenceWarning`` is raised.
         Upon consecutive calls, training starts where it left off.
+
         Parameters
         ----------
         X : array-like, shape (n_samples, n_timestep, dim_x)
             List of trajectories. Each row
             corresponds to a single trajectory.
+
         Returns
         -------
         self
@@ -473,11 +475,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def score(self, X, y=None):
         """Compute the per-sample average log-likelihood of the given data X.
+
         Parameters
         ----------
         X : array-like, shape (n_samples, n_dimensions)
             List of n_features-dimensional data points. Each row
             corresponds to a single data point.
+
         Returns
         -------
         log_likelihood : float
@@ -498,11 +502,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def predict(self, X):
         """Predict the hidden variables for the data samples in X using trained model.
+
         Parameters
         ----------
         X : array-like, shape (n_samples, n_features)
             List of n_features-dimensional data points. Each row
             corresponds to a single data point.
+
         Returns
         -------
         labels : array, shape (n_samples,)
@@ -521,10 +527,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def sample(self, n_samples=50):
         """Generate random samples from the fitted GLE model.
+
         Parameters
         ----------
         n_samples : int, optional
             Number of timestep to generate. Defaults to 50.
+
         Returns
         -------
         X : array, shape (n_samples, n_features)
@@ -552,9 +560,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def bic(self, X):
         """Bayesian information criterion for the current model on the input X.
+
         Parameters
         ----------
         X : array of shape (n_samples, n_dimensions)
+
         Returns
         -------
         bic : float
@@ -564,9 +574,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def aic(self, X):
         """Akaike information criterion for the current model on the input X.
+
         Parameters
         ----------
         X : array of shape (n_samples, n_dimensions)
+
         Returns
         -------
         aic : float
