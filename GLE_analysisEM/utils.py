@@ -41,13 +41,13 @@ def loadTestDatas_est(paths, global_param):
         else:
             traj_list_x = np.concatenate((traj_list_x, np.array([np.concatenate((x, v), axis=1)])))
         if traj_list_v is None:
-            traj_list_v = v
+            traj_list_v = np.array([v])
         else:
-            traj_list_v = np.vstack((traj_list_v, v))
+            traj_list_v = np.concatenate((traj_list_v, np.array([v])))
         if traj_list_h is None:
-            traj_list_h = h
+            traj_list_h = np.array([h])
         else:
-            traj_list_h = np.vstack((traj_list_h, h))
+            traj_list_h = np.concatenate((traj_list_h, np.array([h])))
 
     return time, traj_list_x, traj_list_v, traj_list_h
 
