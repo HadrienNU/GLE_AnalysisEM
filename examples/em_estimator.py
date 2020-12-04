@@ -8,12 +8,14 @@ An example plot of :class:`skltemplate.template.TemplateEstimator`
 import numpy as np
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator
+from GLE_analysisEM.utils import loadTestDatas_est
 
-# X = np.arange(100).reshape(1, -1)
-X = np.loadtxt("../GLE_analysisEM/tests/test_traj.dat").reshape(1, -1)
-estimator = GLE_Estimator(verbose=1)
+time, X, traj_list_v, traj_list_h = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat"], {"dim_x": 1, "dim_h": 1})
+estimator = GLE_Estimator(verbose=1, EnforceFDT=True)
 estimator.fit(X)
-print(estimator.nlogL)
+print(estimator.logL)
 # plt.plot(estimator.nlogL)
-plt.plot(estimator.predict(X))
+plt.plot(time[:-2], estimator.predict(X)[:, 0], label="Prediction")
+plt.plot(time, traj_list_h[:, 0], label="Real")
+plt.legend(loc="upper right")
 plt.show()
