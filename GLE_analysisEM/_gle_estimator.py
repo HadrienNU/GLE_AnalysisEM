@@ -132,7 +132,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         initialization and each iteration step. If greater than 1 then
         it prints also the log probability and the time needed
         for each step.
-        
+
     verbose_interval : int, default to 10.
         Number of iteration done before the next print.
     """
@@ -298,7 +298,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_timestep, dim_x)
+        X : array-like, shape (n_samples, n_features)
             List of trajectories. Each row
             corresponds to a single trajectory.
         idx_trajs: array, default []
@@ -484,7 +484,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_dimensions)
+        X : array-like, shape (n_samples, n_features)
             List of n_features-dimensional data points. Each row
             corresponds to a single data point.
 
@@ -575,7 +575,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array of shape (n_samples, n_dimensions)
+        X : array of shape (n_samples, n_features)
 
         Returns
         -------
@@ -589,7 +589,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array of shape (n_samples, n_dimensions)
+        X : array of shape (n_samples, n_features)
 
         Returns
         -------

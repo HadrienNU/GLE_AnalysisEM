@@ -16,7 +16,7 @@ Estimator
    GLE_Estimator
 
 Basis Features
-==============
+===============
 
 .. autosummary::
    :toctree: generated/

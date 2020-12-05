@@ -4,8 +4,8 @@ import numpy as np
 # from sklearn.utils import assert_array_equal
 # from sklearn.utils import assert_allclose
 
-from GLE_analysisEM import GLE_Estimator, sufficient_stats, sufficient_stats_hidden
-from ..utils import loadTestDatas_est, preprocessingTraj, generateRandomDefPosMat
+from GLE_analysisEM import GLE_Estimator, GLE_LinearBasis, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
+from ..utils import loadTestDatas_est, generateRandomDefPosMat
 
 
 @pytest.fixture
@@ -16,6 +16,10 @@ def data():
 def test_gen_random_mat():
     A = generateRandomDefPosMat()
     assert np.all(np.linalg.eigvals(A + A.T) > 0)
+
+
+def test_linear_basis(data):
+    transform = GLE_LinearBasis(dim_x=1)
 
 
 def test_user_input(data):
@@ -29,13 +33,20 @@ def test_markov_input(data):
 def test_m_step_aboba(data):
     est = GLE_Estimator()
     est._check_initial_parameters()
-    time, traj_list_x, traj_list_v, traj_list_h = loadTestDatas_est(data, {"dim_x": 1, "dim_h": 1})
-    traj_list = preprocessingTraj(traj_list_x, 5e-3, 1, lambda x: -1 * x)
+    X, idx, Xh = loadTestDatas_est(data, 1, 1)
+    basis = GLE_LinearBasis(dim_x=1)
+    X_basis = basis.fit_transform(X)
+    X = np.hstack((X, X_basis))
+
+    Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
+    traj_list = np.split(Xproc, idx)
+    traj_list_h = np.split(Xh, idx)
+
     datas = 0.0
     for n, traj in enumerate(traj_list):
         datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force) / len(traj_list)
-        zero_sig = np.zeros((traj.attrs["lenTraj"], 2 * est.dim_h, 2 * est.dim_h))
-        muh = np.hstack((np.roll(traj_list_h, -1, axis=0), traj_list_h))
+        zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
+        muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
         datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
     est._initialize_parameters(datas_visible, np.random.default_rng())
     logL1 = est.loglikelihood(datas)
@@ -48,13 +59,19 @@ def test_e_step_aboba(data):
 
     est = GLE_Estimator(C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), init_params="user")
     est._check_initial_parameters()
-    time, traj_list_x, traj_list_v, traj_list_h = loadTestDatas_est(data, {"dim_x": 1, "dim_h": 1})
-    traj_list = preprocessingTraj(traj_list_x, 5e-3, 1, lambda x: -1 * x)
+    X, idx, Xh = loadTestDatas_est(data, 1, 1)
+    basis = GLE_LinearBasis(dim_x=1)
+    X_basis = basis.fit_transform(X)
+    X = np.hstack((X, X_basis))
+
+    Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
+    traj_list = np.split(Xproc, idx)
+    traj_list_h = np.split(Xh, idx)
     datas = 0.0
     for n, traj in enumerate(traj_list):
         datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force) / len(traj_list)
-        zero_sig = np.zeros((traj.attrs["lenTraj"], 2 * est.dim_h, 2 * est.dim_h))
-        muh = np.hstack((np.roll(traj_list_h, -1, axis=0), traj_list_h))
+        zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
+        muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
         datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
     est._initialize_parameters(datas_visible, np.random.default_rng())
 
@@ -67,8 +84,11 @@ def test_e_step_aboba(data):
 def test_em_estimator(data):
     est = GLE_Estimator(verbose=1, C_init=np.identity(2))
     assert est.dt == 5e-3
-    time, traj_list_x, traj_list_v, traj_list_h = loadTestDatas_est(data, {"dim_x": 1, "dim_h": 1})
-    est.fit(traj_list_x)
+    X, idx, Xh = loadTestDatas_est(data, 1, 1)
+    basis = GLE_LinearBasis(dim_x=1)
+    X_basis = basis.fit_transform(X)
+    X = np.hstack((X, X_basis))
+    est.fit(X)
     assert hasattr(est, "converged_")
 
     # X = data[0]
