@@ -6,6 +6,34 @@ import pandas as pd
 import scipy.linalg
 
 
+def preprocessingTraj(X, dt, dim_x):
+    """
+    From a flat array compute everythong that is needed for the following computation
+    """
+    X = check_array(X, ensure_min_features=4, allow_nd=True)
+    traj_list = []
+    for xv in X:
+        x, v = np.hsplit(xv, 2)
+        tps = dt * np.arange(x.shape[0])
+        # v = (np.roll(x, -1, axis=0) - x) / dt
+        # print(v)
+        # xv_np = np.hstack((x, v))
+        xhalf = xr.DataArray(x + 0.5 * dt * v, coords={"t": tps}, dims=["t", "space"])
+        projmat = np.zeros((dim_x, 2 * dim_x))
+        projmat[:dim_x, :dim_x] = 0.5 * dt / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
+        projmat[:dim_x, dim_x : 2 * dim_x] = 1.0 / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
+
+        P = projmat.copy()
+        P[:dim_x, dim_x : 2 * dim_x] = (1 + ((0.5 * dt) ** 2 / (1 + (0.5 * dt) ** 2))) * np.identity(dim_x)
+        xv_plus_proj = (np.matmul(projmat, np.roll(xv, -1, axis=0).T)).T
+        xv_proj = np.matmul(P, xv.T).T
+
+        xv = xr.Dataset({"xv_plus_proj": (["t", "dim_x"], xv_plus_proj), "xv_proj": (["t", "dim_x"], xv_proj), "v": (["t", "dim_x"], v)}, coords={"t": tps})
+        xv.attrs["lenTraj"] = x.shape[0]
+        traj_list.append(xv)
+    return traj_list, xhalf  # TODO mettre xhalf sous la forme [nb_traj,nb_timestep, dim_x]
+
+
 def sufficient_stats_aboba(traj, dim_x, dim_force):
     """
     Given a sample of trajectory, compute the averaged values of the sufficient statistics
