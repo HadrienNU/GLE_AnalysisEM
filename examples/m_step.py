@@ -8,8 +8,8 @@ Inner working of the M step,  maximum likelihood estimation of the coefficients 
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, sufficient_stats, sufficient_stats_hidden
-from GLE_analysisEM.utils import loadTestDatas_est, preprocessingTraj
+from GLE_analysisEM import GLE_Estimator, sufficient_stats, sufficient_stats_hidden, preprocessingTraj, GLE_LinearBasis
+from GLE_analysisEM.utils import loadTestDatas_est
 
 
 # Printing options
@@ -18,15 +18,23 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", -1)
 
-est = GLE_Estimator(init_params="user", EnforceFDT=True, OptimizeDiffusion=False, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]))
+est = GLE_Estimator(init_params="user", EnforceFDT=True, OptimizeDiffusion=True, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]))
 est._check_initial_parameters()
-time, X, _, traj_list_h = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat"], {"dim_x": 1, "dim_h": 1})
-traj_list = preprocessingTraj(X, est.dt, est.dim_x, est.force)
+
+X, idx, Xh = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat"], 1, 1)
+basis = GLE_LinearBasis(dim_x=1)
+X_basis = basis.fit_transform(X)
+X = np.hstack((X, X_basis))
+
+Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
+traj_list = np.split(Xproc, idx)
+traj_list_h = np.split(Xh, idx)
+
 datas = 0.0
 for n, traj in enumerate(traj_list):
     datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force) / len(traj_list)
-    zero_sig = np.zeros((traj.attrs["lenTraj"], 2 * est.dim_h, 2 * est.dim_h))
-    muh = np.hstack((np.roll(traj_list_h, -1, axis=0), traj_list_h))
+    zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
+    muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
     datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
 est._initialize_parameters(datas_visible, np.random.default_rng())
 print(est._get_parameters())

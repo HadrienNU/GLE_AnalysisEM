@@ -6,8 +6,7 @@
 Welcome to GLE_AnalysisEM's documentation!
 ============================================
 
-This project is a reference implementation to anyone who wishes to develop
-scikit-learn compatible classes.
+This project is implementation of Expectation-Maximumization algorithm for the inference of Generalized Langevin Equations.
 
 .. toctree::
    :maxdepth: 2
@@ -44,7 +43,7 @@ An example of narrative documentation.
 `API Documentation <api.html>`_
 -------------------------------
 
-An example of API documentation.
+The details of the API.
 
 `Examples <auto_examples/index.html>`_
 --------------------------------------

@@ -2,17 +2,14 @@
 This the main estimator module
 """
 import numpy as np
-import xarray as xr
 
-import warnings
-from time import time
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_array
 
 
-class GLE_LinearTransformer(TransformerMixin, BaseEstimator):
+class GLE_LinearBasis(TransformerMixin, BaseEstimator):
     """ A simple transformer that give values of the linear basis along the trajectories.
 
     Parameters
@@ -34,7 +31,7 @@ class GLE_LinearTransformer(TransformerMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : {array-like, sparse matrix}, shape (n_samples, n_time_step, dim_x)
+        X : {array-like, sparse matrix}, shape (n_samples, dim_x)
             The training input samples.
         y : None
             There is no need of a target in a transformer, yet the pipeline API
@@ -46,7 +43,6 @@ class GLE_LinearTransformer(TransformerMixin, BaseEstimator):
             Returns self.
         """
         self.basis_type_ = "linear"
-        X = check_array(X, ensure_min_features=4, allow_nd=True)
         return self
 
     def transform(self, X):
@@ -67,18 +63,15 @@ class GLE_LinearTransformer(TransformerMixin, BaseEstimator):
         check_is_fitted(self, "basis_type_")
 
         # Input validation
-        X = check_array(X, ensure_min_features=4, allow_nd=True)
-        traj_list = []
-        for xhalf in X:
-            # xhalf = xr.DataArray(x + 0.5 * self.dt_ * v, coords={"t": tps}, dims=["t", "space"])  # Déjà fourni
-            bk = xr.apply_ufunc(lambda x: -1.0 * x, xhalf, input_core_dims=[["space"]], output_core_dims=[["space"]], vectorize=True)  # Linear features
-            xv = xr.Dataset({"bk": (["t", "dim_x"], bk)}, coords={"t": tps})
-            traj_list.append(xv)
-        return traj_list
+        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        dt = X[1, 0] - X[0, 0]
+        xhalf = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
+        return xhalf
 
 
-class GLE_PolynomialTransformer(TransformerMixin, BaseEstimator):
+class GLE_PolynomialBasis(TransformerMixin, BaseEstimator):
     """ A transformer that give values of for a polynomial basis along the trajectories.
+    .. todo:: To implement the Polynomial Features, include a choice of Hermite basis?
 
     Parameters
     ----------
@@ -112,13 +105,36 @@ class GLE_PolynomialTransformer(TransformerMixin, BaseEstimator):
             Returns self.
         """
         self.basis_type_ = "polynomial"
-        X = check_array(X, ensure_min_features=4, allow_nd=True)
         return self
 
+    def transform(self, X):
+        """ A reference implementation of a transform function.
+        Take the x_{1/2} as input and output basis expansion
 
-class GLE_BSplinesTransformer(TransformerMixin, BaseEstimator):
+        Parameters
+        ----------
+        X : {array-like, sparse-matrix}, shape (n_samples, n_features)
+            The input samples.
+
+        Returns
+        -------
+        X_transformed : array, shape (n_samples, n_features)
+
+        """
+        # Check is fit had been called
+        check_is_fitted(self, "basis_type_")
+
+        # Input validation
+        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        dt = X[1, 0] - X[0, 0]
+        xhalf = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
+        return xhalf
+
+
+class GLE_BSplinesBasis(TransformerMixin, BaseEstimator):
     """ A transformer that give values of for a B-splines basis along the trajectories.
-
+    .. todo:: To implement the Bsplines Features
+    
     Parameters
     ----------
     dim_x : int, default=1
@@ -150,6 +166,28 @@ class GLE_BSplinesTransformer(TransformerMixin, BaseEstimator):
         self : object
             Returns self.
         """
-        self.basis_type_ = "B-splines"
-        X = check_array(X, ensure_min_features=4, allow_nd=True)
+        self.basis_type_ = "BSplines"
         return self
+
+    def transform(self, X):
+        """ A reference implementation of a transform function.
+        Take the x_{1/2} as input and output basis expansion
+
+        Parameters
+        ----------
+        X : {array-like, sparse-matrix}, shape (n_samples, n_features)
+            The input samples.
+
+        Returns
+        -------
+        X_transformed : array, shape (n_samples, n_features)
+
+        """
+        # Check is fit had been called
+        check_is_fitted(self, "basis_type_")
+
+        # Input validation
+        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        dt = X[1, 0] - X[0, 0]
+        xhalf = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
+        return xhalf

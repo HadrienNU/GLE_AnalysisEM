@@ -15,12 +15,15 @@ Estimator
 
    GLE_Estimator
 
-Transformer
-===========
+Basis Features
+==============
 
 .. autosummary::
    :toctree: generated/
    :template: class.rst
 
-   GLE_LinearTransformer
+   GLE_LinearBasis
 
+   GLE_PolynomialBasis
+
+   GLE_BSplinesBasis

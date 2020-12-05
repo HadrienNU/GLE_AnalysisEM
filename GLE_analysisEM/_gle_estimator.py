@@ -9,11 +9,11 @@ from time import time
 
 from sklearn.base import BaseEstimator, DensityMixin
 from sklearn.utils.validation import check_is_fitted
-from sklearn.utils import check_random_state
+from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
-from .utils import generateRandomDefPosMat, preprocessingTraj, filter_kalman, smoothing_rauch
-from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, mle_derivative_expA_FDT
+from .utils import generateRandomDefPosMat, filter_kalman, smoothing_rauch
+from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, mle_derivative_expA_FDT, preprocessingTraj_aboba, compute_expectation_estep_aboba
 
 
 def convert_user_coefficients(dt, A, C):
@@ -44,6 +44,20 @@ def sufficient_stats(traj, dim_x, dim_force, model="ABOBA"):
 def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="ABOBA"):
     if model == "ABOBA":
         return sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force)
+    else:
+        raise ValueError("Model {} not implemented".format(model))
+
+
+def preprocessingTraj(X, idx_trajs, dim_x, model="ABOBA"):
+    if model == "ABOBA":
+        return preprocessingTraj_aboba(X, idx_trajs=idx_trajs, dim_x=dim_x)
+    else:
+        raise ValueError("Model {} not implemented".format(model))
+
+
+def compute_expectation_estep(traj, expA, dim_x, dim_h, dt, model="ABOBA"):
+    if model == "ABOBA":
+        return compute_expectation_estep_aboba(traj, expA, dim_x, dim_h, dt)
     else:
         raise ValueError("Model {} not implemented".format(model))
 
@@ -118,31 +132,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         initialization and each iteration step. If greater than 1 then
         it prints also the log probability and the time needed
         for each step.
+        
     verbose_interval : int, default to 10.
         Number of iteration done before the next print.
     """
 
     def __init__(
-        self,
-        dt=5e-3,
-        dim_x=1,
-        dim_h=1,
-        tol=1e-3,
-        max_iter=100,
-        OptimizeDiffusion=True,
-        EnforceFDT=False,
-        init_params="random",
-        force=lambda x: -1.0 * x,
-        A_init=None,
-        C_init=None,
-        mu_init=None,
-        sig_init=None,
-        n_init=1,
-        random_state=None,
-        warm_start=False,
-        no_stop=False,
-        verbose=0,
-        verbose_interval=10,
+        self, dt=5e-3, dim_x=1, dim_h=1, tol=1e-3, max_iter=100, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", model="ABOBA", A_init=None, C_init=None, mu_init=None, sig_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10
     ):
         self.dt = dt
         self.dim_x = dim_x  # Il faudrait le calculer dans _check_initial_parameters plutôt
@@ -151,7 +147,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.OptimizeDiffusion = OptimizeDiffusion
         self.EnforceFDT = EnforceFDT
 
-        self.force = force
+        self.model = model
 
         self.A_init = A_init
         self.C_init = C_init
@@ -172,6 +168,22 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _more_tags(self):
         return {"X_types": "ndarray"}
+
+    def set_init_coeffs(self, coeffs):
+        """ Set the initial values of the coefficients via a dict
+
+        Parameters
+        ----------
+        coeffs : dict
+        Contains the wanted values of the initial coefficients,
+        if a key is absent the coefficients is set to None
+        """
+        keys_coeffs = ["A", "C", "µ_0", "Σ_0"]
+        init_coeffs = [None] * len(keys_coeffs)
+        for n, key in enumerate(keys_coeffs):
+            if key in coeffs:
+                init_coeffs[n] = coeffs[key]
+        self.A_init, self.C_init, self.mu_init, self.sig_init = init_coeffs
 
     def _check_initial_parameters(self):
         """Check values of the basic parameters.
@@ -218,21 +230,22 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.dim_coeffs_force = self.dim_x
         self.coeffs_force = np.identity(self.dim_x)
 
-    def set_init_coeffs(self, coeffs):
-        """ Set the initial values of the coefficients via a dict
+    def _check_n_features(self, X):
+        """Check if we have enough datas to to the fit.
+        It is required that  1[time]+2*dim_x[position, velocity]+dim_coeffs_force[force basis] features are present.
 
         Parameters
         ----------
-        coeffs : dict
-        Contains the wanted values of the initial coefficients,
-        if a key is absent the coefficients is set to None
+        X : {ndarray, sparse matrix} of shape (n_samples, n_features)
+            The input samples.
         """
-        keys_coeffs = ["A", "C", "µ_0", "Σ_0"]
-        init_coeffs = [None] * len(keys_coeffs)
-        for n, key in enumerate(keys_coeffs):
-            if key in coeffs:
-                init_coeffs[n] = coeffs[key]
-        self.A_init, self.C_init, self.mu_init, self.sig_init = init_coeffs
+        n_features = X.shape[1]
+        if self.model in ["ABOBA"]:
+            expected_features = 1 + 2 * self.dim_x + self.dim_coeffs_force  # Set the number of expected dimension in in input
+        elif self.model == "overdamped":
+            expected_features = 1 + self.dim_x + self.dim_coeffs_force  # Set the number of expected dimension in in input
+        if n_features != expected_features:
+            raise ValueError(f"X has {n_features} features, but {self.__class__.__name__} " f"is expecting {expected_features} features as input. Did you forget to add basis features?")
 
     def _initialize_parameters(self, suff_stats_visibles, random_state):
         """Initialize the model parameters.
@@ -274,25 +287,33 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         else:
             self.sig0 = np.identity(self.dim_h)
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, idx_trajs=[]):
         """Estimate model parameters with the EM algorithm.
         The method iterates between E-step and M-step for ``max_iter``
         times until the change of likelihood or lower bound is less than
         ``tol``, otherwise, a ``ConvergenceWarning`` is raised.
         Upon consecutive calls, training starts where it left off.
 
+        ..todo:: Change variable name of expA and SST into friction_coeffs and diffusion_coeffs
+
         Parameters
         ----------
         X : array-like, shape (n_samples, n_timestep, dim_x)
             List of trajectories. Each row
             corresponds to a single trajectory.
+        idx_trajs: array, default []
+            Location of split if multiple trajectory are inputed
 
         Returns
         -------
         self
         """
         self._check_initial_parameters()
-        traj_list = preprocessingTraj(X, self.dt, self.dim_x, self.force)
+        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        self._check_n_features(X)
+
+        Xproc = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x)
+        traj_list = np.split(Xproc, idx_trajs)
         # print(traj_list)
         # if we enable warm_start, we will have a unique initialisation
         do_init = not (self.warm_start and hasattr(self, "converged_"))
@@ -354,21 +375,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         return self
 
-    def _compute_expectation_estep(self, traj):
-        """
-        Compute the value of mutilde and Xtplus
-        """
-        Xt = traj["xv_proj"].values
-        Xtplus = traj["xv_plus_proj"].values
-        Vt = traj["v"].values
-        bkt = traj["bk"].values
-        Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
-
-        mutilde = (np.matmul(np.identity(self.dim_x + self.dim_h)[:, : self.dim_x], Xt.T - Vt.T) + np.matmul(self.expA[:, : self.dim_x], Vt.T) + np.matmul(self.expA + np.identity(self.dim_x + self.dim_h), np.matmul(Pf, bkt.T))).T
-
-        return Xtplus, mutilde
-
     def _e_step(self, traj):
         """E step.
         Parameters
@@ -383,7 +389,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Covariances of the pair of the hidden variables
         """
         # Initialize, we are going to use a numpy array for storing intermediate values and put the resulting µh and \Sigma_h into the xarray only at the end
-        lenTraj = traj.attrs["lenTraj"]
+        lenTraj = len(traj)
         muf = np.zeros((lenTraj, self.dim_h))
         Sigf = np.zeros((lenTraj, self.dim_h, self.dim_h))
         mus = np.zeros((lenTraj, self.dim_h))
@@ -392,7 +398,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         muh = np.zeros((lenTraj, 2 * self.dim_h))
         Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
 
-        Xtplus, mutilde = self._compute_expectation_estep(traj)
+        Xtplus, mutilde = compute_expectation_estep(traj, self.expA, self.dim_x, self.dim_h, self.dt, self.model)
 
         if self.verbose >= 4:
             print("## Forward ##")
@@ -417,7 +423,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _m_step(self, sufficient_stat):
         """M step.
-        TODO:   -Select dimension of fitted parameters from the sufficient stats
+        .. todo::   -Select dimension of fitted parameters from the sufficient stats
                 -Allow to select statistical model (Euler/ ABOBA)
         """
         Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
@@ -473,7 +479,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         else:
             return -np.trace(np.matmul(np.linalg.inv(self.SST), 0.5 * m1))
 
-    def score(self, X, y=None):
+    def score(self, X, y=None, idx_trajs=[]):
         """Compute the per-sample average log-likelihood of the given data X.
 
         Parameters
@@ -488,8 +494,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Log likelihood of the Gaussian mixture given X.
         """
         check_is_fitted(self, "converged_")
+        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        self._check_n_features(X)
 
-        traj_list = preprocessingTraj(X, self.dt, self.dim_x, self.force)
+        Xproc = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x)
+        traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
         # hidenS = 0.0
@@ -500,7 +509,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             # hidenS += hidden_entropy(traj, global_param)
         return self.loglikelihood(new_stat)  # +hidenS
 
-    def predict(self, X):
+    def predict(self, X, idx_trajs=[]):
         """Predict the hidden variables for the data samples in X using trained model.
 
         Parameters
@@ -515,14 +524,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Component labels.
         """
         check_is_fitted(self, "converged_")
-        traj_list = preprocessingTraj(X, self.dt, self.dim_x, self.force)
+        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        self._check_n_features(X)
+        Xproc = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x)
+        traj_list = np.split(Xproc, idx_trajs)
         muh_out = None
         for traj in traj_list:
             muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
             if muh_out is None:
-                muh_out = muh[:-2, : self.dim_x]
+                muh_out = muh[:, self.dim_h :]
             else:
-                muh_out = np.hstack((muh_out, muh[:-2, : self.dim_x]))
+                muh_out = np.hstack((muh_out, muh[:, self.dim_h :]))
         return muh_out
 
     def sample(self, n_samples=50):

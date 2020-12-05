@@ -6,42 +6,30 @@ import pandas as pd
 import scipy.linalg
 
 
-def preprocessingTraj(X, dt, dim_x):
+def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
     """
-    From a flat array compute everythong that is needed for the following computation
+    From position and velocity array compute everything that is needed for the following computation
     """
-    X = check_array(X, ensure_min_features=4, allow_nd=True)
-    traj_list = []
-    for xv in X:
-        x, v = np.hsplit(xv, 2)
-        tps = dt * np.arange(x.shape[0])
-        # v = (np.roll(x, -1, axis=0) - x) / dt
-        # print(v)
-        # xv_np = np.hstack((x, v))
-        xhalf = xr.DataArray(x + 0.5 * dt * v, coords={"t": tps}, dims=["t", "space"])
-        projmat = np.zeros((dim_x, 2 * dim_x))
-        projmat[:dim_x, :dim_x] = 0.5 * dt / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
-        projmat[:dim_x, dim_x : 2 * dim_x] = 1.0 / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
+    dt = X[1, 0] - X[0, 0]
 
-        P = projmat.copy()
-        P[:dim_x, dim_x : 2 * dim_x] = (1 + ((0.5 * dt) ** 2 / (1 + (0.5 * dt) ** 2))) * np.identity(dim_x)
-        xv_plus_proj = (np.matmul(projmat, np.roll(xv, -1, axis=0).T)).T
-        xv_proj = np.matmul(P, xv.T).T
+    projmat = np.zeros((dim_x, 2 * dim_x))
+    projmat[:dim_x, :dim_x] = 0.5 * dt / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
+    projmat[:dim_x, dim_x : 2 * dim_x] = 1.0 / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
+    P = projmat.copy()
+    P[:dim_x, dim_x : 2 * dim_x] = (1 + ((0.5 * dt) ** 2 / (1 + (0.5 * dt) ** 2))) * np.identity(dim_x)
 
-        xv = xr.Dataset({"xv_plus_proj": (["t", "dim_x"], xv_plus_proj), "xv_proj": (["t", "dim_x"], xv_proj), "v": (["t", "dim_x"], v)}, coords={"t": tps})
-        xv.attrs["lenTraj"] = x.shape[0]
-        traj_list.append(xv)
-    return traj_list, xhalf  # TODO mettre xhalf sous la forme [nb_traj,nb_timestep, dim_x]
+    xv_plus_proj = (np.matmul(projmat, np.roll(X[:, 1 : 1 + 2 * dim_x], -1, axis=0).T)).T
+    xv_proj = np.matmul(P, X[:, 1 : 1 + 2 * dim_x].T).T
+    v = X[:, 1 + dim_x : 1 + 2 * dim_x]
+    bk = X[:, 1 + 2 * dim_x :]
+    return np.hstack((xv_plus_proj, xv_proj, v, bk))
 
 
 def sufficient_stats_aboba(traj, dim_x, dim_force):
     """
     Given a sample of trajectory, compute the averaged values of the sufficient statistics
+    Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
-
-    diffs = traj["xv_plus_proj"].values - traj["xv_proj"].values
-
-    x_val_proj = traj["v"].values
 
     xx = np.zeros((dim_x, dim_x))
     xdx = np.zeros_like(xx)
@@ -50,15 +38,14 @@ def sufficient_stats_aboba(traj, dim_x, dim_force):
     bkdx = np.zeros_like(bkx)
     bkbk = np.zeros((dim_force, dim_force))
 
-    bk = traj["bk"].data
-    lenTraj = traj.attrs["lenTraj"]
+    lenTraj = len(traj)
     for i in range(lenTraj - 1):  # The -1 comes from the last values removed
-        xx += np.outer(x_val_proj[i], x_val_proj[i])
-        xdx += np.outer(x_val_proj[i], diffs[i])
-        dxdx += np.outer(diffs[i], diffs[i])
-        bkx += np.outer(bk[i], x_val_proj[i])
-        bkdx += np.outer(bk[i], diffs[i])
-        bkbk += np.outer(bk[i], bk[i])
+        xx += np.outer(traj[i, 2 * dim_x : 3 * dim_x], traj[i, 2 * dim_x : 3 * dim_x])
+        xdx += np.outer(traj[i, 2 * dim_x : 3 * dim_x], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
+        dxdx += np.outer(traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
+        bkx += np.outer(traj[i, 3 * dim_x :], traj[i, 2 * dim_x : 3 * dim_x])
+        bkdx += np.outer(traj[i, 3 * dim_x :], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
+        bkbk += np.outer(traj[i, 3 * dim_x :], traj[i, 3 * dim_x :])
 
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk}) / (lenTraj - 1)
 
@@ -66,43 +53,35 @@ def sufficient_stats_aboba(traj, dim_x, dim_force):
 def sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force):
     """
     Compute the sufficient statistics averaged over the hidden variable distribution
+    Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
 
-    dim_tot = dim_x + dim_h
-
-    xx = np.zeros((dim_tot, dim_tot))
+    xx = np.zeros((dim_x + dim_h, dim_x + dim_h))
     xx[:dim_x, :dim_x] = old_stats["xx"]
     xdx = np.zeros_like(xx)
     xdx[:dim_x, :dim_x] = old_stats["xdx"]
     dxdx = np.zeros_like(xx)
     dxdx[:dim_x, :dim_x] = old_stats["dxdx"]
-    bkx = np.zeros((dim_force, dim_tot))
+    bkx = np.zeros((dim_force, dim_x + dim_h))
     bkx[:, :dim_x] = old_stats["bkx"]
     bkdx = np.zeros_like(bkx)
     bkdx[:, :dim_x] = old_stats["bkdx"]
 
-    bk = traj["bk"].data
-
-    diffs_xv = traj["xv_plus_proj"].values - traj["xv_proj"].values
-
-    x_val_proj = traj["v"].values
-
-    lenTraj = traj.attrs["lenTraj"]
-
+    lenTraj = len(traj)
     for i in range(lenTraj - 1):  # The -1 comes from the last values removed
         # print(muh[i, dim_h:])
         xx[dim_x:, dim_x:] += Sigh[i, dim_h:, dim_h:] + np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        xx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], x_val_proj[i])
+        xx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], traj[i, 2 * dim_x : 3 * dim_x])
 
         xdx[dim_x:, dim_x:] += Sigh[i, dim_h:, :dim_h] + np.outer(muh[i, dim_h:], muh[i, :dim_h]) - Sigh[i, dim_h:, dim_h:] - np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        xdx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], diffs_xv[i])
-        xdx[:dim_x, dim_x:] += np.outer(x_val_proj[i], muh[i, :dim_h] - muh[i, dim_h:])
+        xdx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
+        xdx[:dim_x, dim_x:] += np.outer(traj[i, 2 * dim_x : 3 * dim_x], muh[i, :dim_h] - muh[i, dim_h:])
 
         dxdx[dim_x:, dim_x:] += Sigh[i, :dim_h, :dim_h] + np.outer(muh[i, :dim_h], muh[i, :dim_h]) - 2 * Sigh[i, dim_h:, :dim_h] - np.outer(muh[i, dim_h:], muh[i, :dim_h]) - np.outer(muh[i, :dim_h], muh[i, dim_h:]) + Sigh[i, dim_h:, dim_h:] + np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        dxdx[dim_x:, :dim_x] += np.outer(muh[i, :dim_h] - muh[i, dim_h:], diffs_xv[i])
+        dxdx[dim_x:, :dim_x] += np.outer(muh[i, :dim_h] - muh[i, dim_h:], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
 
-        bkx[:, dim_x:] += np.outer(bk[i], muh[i, dim_h:])
-        bkdx[:, dim_x:] += np.outer(bk[i], muh[i, :dim_h] - muh[i, dim_h:])
+        bkx[:, dim_x:] += np.outer(traj[i, 3 * dim_x :], muh[i, dim_h:])
+        bkdx[:, dim_x:] += np.outer(traj[i, 3 * dim_x :], muh[i, :dim_h] - muh[i, dim_h:])
 
     # Normalisation
     xx[dim_x:, :] /= lenTraj - 1
@@ -124,7 +103,6 @@ def sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_
 def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, invSST, dim_tot):
     """
     Compute the value of the derivative with respect to expA only for the term related to the FDT (i.e. Sigma)
-    TODO
     """
     expA = theta.reshape((dim_tot, dim_tot))
     deriv_expA = np.zeros_like(theta)
@@ -148,17 +126,14 @@ def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, invSST, dim_t
 def compute_expectation_estep_aboba(traj, expA, dim_x, dim_h, dt):
     """
     Compute the value of mutilde and Xtplus
+    Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
-    Xt = traj["xv_proj"].values
-    Xtplus = traj["xv_plus_proj"].values
-    Vt = traj["v"].values
-    bkt = traj["bk"].values
     Pf = np.zeros((dim_x + dim_h, dim_x))
     Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
 
-    mutilde = (np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], Xt.T - Vt.T) + np.matmul(expA[:, :dim_x], Vt.T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, bkt.T))).T
+    mutilde = (np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, traj[:, 3 * dim_x :].T))).T
 
-    return Xtplus, mutilde
+    return traj[:, :dim_x], mutilde
 
 
 def m_step_aboba(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, OptimizeDiffusion, dim_h, dt):
