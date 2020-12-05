@@ -18,7 +18,7 @@ datas = 0.0
 for n, traj in enumerate(traj_list):
     datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force) / len(traj_list)
     zero_sig = np.zeros((traj.attrs["lenTraj"], 2 * est.dim_h, 2 * est.dim_h))
-    muh = np.hstack((np.roll(traj_list_h, -1, axis=0), traj_list_h))
+    muh = np.hstack((np.roll(traj_list_h[0], -1, axis=0), traj_list_h[0]))
     datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
 
 est._initialize_parameters(datas_visible, np.random.default_rng())
@@ -31,6 +31,6 @@ plt.plot(time[:-2], muh[:-2, 0], label="Prediction (with 2 \\sigma error lines)"
 plt.plot(time[:-2], muh[:-2, 0] + 2 * np.sqrt(Sigh[:-2, 0, 0]), "--", color="blue", linewidth=0.1)
 plt.plot(time[:-2], muh[:-2, 0] - 2 * np.sqrt(Sigh[:-2, 0, 0]), "--", color="blue", linewidth=0.1)
 # plt.errorbar(time[:-2], muh[:-2, 0], yerr=np.sqrt(Sigh[:-2, 0, 0]), label="Prediction")
-plt.plot(time, traj_list_h[:, 0], label="Real", color="orange")
+plt.plot(time, traj_list_h[0, :, 0], label="Real", color="orange")
 plt.legend(loc="upper right")
 plt.show()
