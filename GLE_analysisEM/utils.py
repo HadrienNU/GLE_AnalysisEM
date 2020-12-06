@@ -3,10 +3,6 @@ Somes utilities function
 """
 import numpy as np
 import scipy.linalg
-import xarray as xr
-from sklearn.utils import check_array
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.utils.validation import check_is_fitted
 
 
 def loadTestDatas_est(paths, dim_x, dim_h):

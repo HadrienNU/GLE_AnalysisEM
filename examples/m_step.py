@@ -7,7 +7,8 @@ Inner working of the M step,  maximum likelihood estimation of the coefficients 
 """
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
+
+# from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
 from GLE_analysisEM.utils import loadTestDatas_est
 
@@ -18,12 +19,13 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", -1)
 
-est = GLE_Estimator(init_params="user", EnforceFDT=True, OptimizeDiffusion=True, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]))
+est = GLE_Estimator(init_params="user", EnforceFDT=True, OptimizeDiffusion=True, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), force_init=np.array([-1]))
 est._check_initial_parameters()
 
 X, idx, Xh = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat"], 1, 1)
-basis = GLE_BasisTransform(dim_x=1)
+basis = GLE_BasisTransform()
 X = basis.fit_transform(X)
+est._check_n_features(X)
 
 Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
 traj_list = np.split(Xproc, idx)

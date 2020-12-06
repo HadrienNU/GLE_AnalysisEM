@@ -123,15 +123,16 @@ def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, invSST, dim_t
     return deriv_expA
 
 
-def compute_expectation_estep_aboba(traj, expA, dim_x, dim_h, dt):
+def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
     """
     Compute the value of mutilde and Xtplus
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
     Pf = np.zeros((dim_x + dim_h, dim_x))
     Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
-
-    mutilde = (np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, traj[:, 3 * dim_x :].T))).T
+    mutilde = (
+        np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))
+    ).T
 
     return traj[:, :dim_x], mutilde
 

@@ -18,24 +18,26 @@ def test_gen_random_mat():
     assert np.all(np.linalg.eigvals(A + A.T) > 0)
 
 
-def test_linear_basis(data):
-    transform = GLE_LinearBasis(dim_x=1)
-
-
-def test_user_input(data):
-    est = GLE_Estimator(init_params="user")
-
-
-def test_markov_input(data):
-    est = GLE_Estimator(init_params="markov")
+# def test_basis_proj(data):
+#     transform = GLE_BasisTransform(dim_x=1)
+#
+#
+# def test_user_input(data):
+#     est = GLE_Estimator(init_params="user")
+#
+#
+# def test_markov_input(data):
+#     est = GLE_Estimator(init_params="markov")
+#
 
 
 def test_m_step_aboba(data):
     est = GLE_Estimator()
     est._check_initial_parameters()
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
-    basis = GLE_BasisTransform(dim_x=1)
+    basis = GLE_BasisTransform()
     X = basis.fit_transform(X)
+    est._check_n_features(X)
 
     Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
     traj_list = np.split(Xproc, idx)
@@ -56,11 +58,12 @@ def test_m_step_aboba(data):
 
 def test_e_step_aboba(data):
 
-    est = GLE_Estimator(C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), init_params="user")
+    est = GLE_Estimator(C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), force_init=np.array([-1]), init_params="user")
     est._check_initial_parameters()
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
-    basis = GLE_BasisTransform(dim_x=1)
+    basis = GLE_BasisTransform()
     X = basis.fit_transform(X)
+    est._check_n_features(X)
 
     Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
     traj_list = np.split(Xproc, idx)
@@ -83,7 +86,7 @@ def test_em_estimator(data):
     est = GLE_Estimator(verbose=1, C_init=np.identity(2))
     assert est.dt == 5e-3
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
-    basis = GLE_BasisTransform(dim_x=1)
+    basis = GLE_BasisTransform()
     X = basis.fit_transform(X)
     est.fit(X)
     assert hasattr(est, "converged_")

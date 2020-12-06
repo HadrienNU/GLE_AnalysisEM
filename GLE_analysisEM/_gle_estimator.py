@@ -55,9 +55,9 @@ def preprocessingTraj(X, idx_trajs, dim_x, model="ABOBA"):
         raise ValueError("Model {} not implemented".format(model))
 
 
-def compute_expectation_estep(traj, expA, dim_x, dim_h, dt, model="ABOBA"):
+def compute_expectation_estep(traj, expA, force_coeffs, dim_x, dim_h, dt, model="ABOBA"):
     if model == "ABOBA":
-        return compute_expectation_estep_aboba(traj, expA, dim_x, dim_h, dt)
+        return compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt)
     else:
         raise ValueError("Model {} not implemented".format(model))
 
@@ -292,7 +292,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             (self.expA, self.SST) = convert_user_coefficients(self.dt, A, C)
         elif self.init_params == "user":
             (self.expA, self.SST) = convert_user_coefficients(self.dt, self.A_init, self.C_init)
-            self.coeffs_force = self.force_init
+            self.force_coeffs = self.force_init.reshape(self.dim_x, -1)
         elif self.init_params == "markov":
             self._m_step(suff_stats_visibles)
         else:
@@ -301,9 +301,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             _, self.SST = convert_user_coefficients(self.dt, self.A_init, self.C_init)
 
         if self.force_init is not None:
-            self.coeffs_force = self.force_init
+            self.force_coeffs = self.force_init.reshape(self.dim_x, -1)
         else:
-            self.coeffs_force = np.identity(self.dim_x)
+            self.force_coeffs = np.identity(self.dim_x)
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
             self.mu0 = self.mu_init
@@ -425,7 +425,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         muh = np.zeros((lenTraj, 2 * self.dim_h))
         Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
 
-        Xtplus, mutilde = compute_expectation_estep(traj, self.expA, self.dim_x, self.dim_h, self.dt, self.model)
+        Xtplus, mutilde = compute_expectation_estep(traj, self.expA, self.force_coeffs, self.dim_x, self.dim_h, self.dt, self.model)
 
         if self.verbose >= 4:
             print("## Forward ##")
@@ -456,9 +456,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
         Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
 
-        bkbk = np.matmul(Pf, np.matmul(np.matmul(self.coeffs_force, np.matmul(sufficient_stat["bkbk"], self.coeffs_force.T)), Pf.T))
-        bkdx = np.matmul(Pf, np.matmul(self.coeffs_force, sufficient_stat["bkdx"]))
-        bkx = np.matmul(Pf, np.matmul(self.coeffs_force, sufficient_stat["bkx"]))
+        bkbk = np.matmul(Pf, np.matmul(np.matmul(self.force_coeffs, np.matmul(sufficient_stat["bkbk"], self.force_coeffs.T)), Pf.T))
+        bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkdx"]))
+        bkx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkx"]))
         Id = np.identity(self.dim_x + self.dim_h)
         if not self.EnforceFDT:
 
@@ -493,9 +493,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
         Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
 
-        bkbk = np.matmul(Pf, np.matmul(np.matmul(self.coeffs_force, np.matmul(suff_datas["bkbk"], self.coeffs_force.T)), Pf.T))
-        bkdx = np.matmul(Pf, np.matmul(self.coeffs_force, suff_datas["bkdx"]))
-        bkx = np.matmul(Pf, np.matmul(self.coeffs_force, suff_datas["bkx"]))
+        bkbk = np.matmul(Pf, np.matmul(np.matmul(self.force_coeffs, np.matmul(suff_datas["bkbk"], self.force_coeffs.T)), Pf.T))
+        bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, suff_datas["bkdx"]))
+        bkx = np.matmul(Pf, np.matmul(self.force_coeffs, suff_datas["bkx"]))
 
         Id = np.identity(self.dim_x + self.dim_h)
         m1 = suff_datas["dxdx"] - np.matmul(self.expA - Id, suff_datas["xdx"]) - np.matmul(self.expA - Id, suff_datas["xdx"]).T - np.matmul(self.expA + Id, bkdx).T - np.matmul(self.expA + Id, bkdx)
