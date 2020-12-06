@@ -8,7 +8,7 @@ An example plot of :class:`GLE_analysisEM.GLE_Estimator`
 import pandas as pd
 
 # from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, GLE_LinearBasis
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 from GLE_analysisEM.utils import loadTestDatas_est
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.pipeline import Pipeline
@@ -19,10 +19,10 @@ paths_train, paths_test = train_test_split(paths)
 X_train, idx_train, Xh_train = loadTestDatas_est(paths_train, 1, 1)
 X_test, idx_test, Xh_test = loadTestDatas_est(paths_test, 1, 1)
 
-pipe = Pipeline([("basis", GLE_LinearBasis(dim_x=1)), ("em", GLE_Estimator(verbose=1, EnforceFDT=False))])
+pipe = Pipeline([("basis", GLE_BasisTransform(dim_x=1)), ("em", GLE_Estimator(verbose=1, EnforceFDT=False))])
 # TODO: Make a pipeline
-basis = GLE_LinearBasis(dim_x=1)
-X_basis = basis.fit_transform(X_train)
+basis = GLE_BasisTransform(dim_x=1)
+X = basis.fit_transform(X)
 
 print(X_train.shape, X_test.shape)
 estimator = GLE_Estimator(verbose=1, EnforceFDT=False)

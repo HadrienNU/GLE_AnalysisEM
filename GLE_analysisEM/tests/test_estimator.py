@@ -4,7 +4,7 @@ import numpy as np
 # from sklearn.utils import assert_array_equal
 # from sklearn.utils import assert_allclose
 
-from GLE_analysisEM import GLE_Estimator, GLE_LinearBasis, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
 from ..utils import loadTestDatas_est, generateRandomDefPosMat
 
 
@@ -34,9 +34,8 @@ def test_m_step_aboba(data):
     est = GLE_Estimator()
     est._check_initial_parameters()
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
-    basis = GLE_LinearBasis(dim_x=1)
-    X_basis = basis.fit_transform(X)
-    X = np.hstack((X, X_basis))
+    basis = GLE_BasisTransform(dim_x=1)
+    X = basis.fit_transform(X)
 
     Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
     traj_list = np.split(Xproc, idx)
@@ -60,9 +59,8 @@ def test_e_step_aboba(data):
     est = GLE_Estimator(C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), init_params="user")
     est._check_initial_parameters()
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
-    basis = GLE_LinearBasis(dim_x=1)
-    X_basis = basis.fit_transform(X)
-    X = np.hstack((X, X_basis))
+    basis = GLE_BasisTransform(dim_x=1)
+    X = basis.fit_transform(X)
 
     Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
     traj_list = np.split(Xproc, idx)
@@ -85,9 +83,8 @@ def test_em_estimator(data):
     est = GLE_Estimator(verbose=1, C_init=np.identity(2))
     assert est.dt == 5e-3
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
-    basis = GLE_LinearBasis(dim_x=1)
-    X_basis = basis.fit_transform(X)
-    X = np.hstack((X, X_basis))
+    basis = GLE_BasisTransform(dim_x=1)
+    X = basis.fit_transform(X)
     est.fit(X)
     assert hasattr(est, "converged_")
 

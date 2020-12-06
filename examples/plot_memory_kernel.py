@@ -7,13 +7,12 @@ An example plot of :class:`skltemplate.template.TemplateEstimator`
 """
 import numpy as np
 from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, GLE_LinearBasis
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 from GLE_analysisEM.utils import loadTestDatas_est, memory_kernel
 
 X, idx, Xh = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat", "../GLE_analysisEM/tests/1_trajectories.dat", "../GLE_analysisEM/tests/2_trajectories.dat"], 1, 1)
-basis = GLE_LinearBasis(dim_x=1)
-X_basis = basis.fit_transform(X)
-X = np.hstack((X, X_basis))
+basis = GLE_BasisTransform(dim_x=1)
+X = basis.fit_transform(X)
 estimator = GLE_Estimator(verbose=1, C_init=np.identity(2), EnforceFDT=False)
 estimator.fit(X)
 time, kernel = memory_kernel(5000, 5e-3, estimator._get_parameters(), 1)

@@ -101,7 +101,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     force : callable, default to lambda x: -1.0*x
         Evaluation of the force field at x
 
-    A_init, C_init, mu_init, sig_init: array, optional
+    A_init, C_init, force_init, mu_init, sig_init: array, optional
         The user-provided initial coefficients, defaults to None.
         If it None, coefficients are initialized using the `init_params` method.
 
@@ -138,10 +138,30 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     """
 
     def __init__(
-        self, dt=5e-3, dim_x=1, dim_h=1, tol=1e-3, max_iter=100, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", model="ABOBA", A_init=None, C_init=None, mu_init=None, sig_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10
+        self,
+        dt=5e-3,
+        dim_x=1,
+        dim_h=1,
+        tol=1e-3,
+        max_iter=100,
+        OptimizeDiffusion=True,
+        EnforceFDT=False,
+        init_params="random",
+        model="ABOBA",
+        A_init=None,
+        C_init=None,
+        force_init=None,
+        mu_init=None,
+        sig_init=None,
+        n_init=1,
+        random_state=None,
+        warm_start=False,
+        no_stop=False,
+        verbose=0,
+        verbose_interval=10,
     ):
         self.dt = dt
-        self.dim_x = dim_x  # Il faudrait le calculer dans _check_initial_parameters plutôt
+        self.dim_x = dim_x
         self.dim_h = dim_h
 
         self.OptimizeDiffusion = OptimizeDiffusion
@@ -151,6 +171,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         self.A_init = A_init
         self.C_init = C_init
+        self.force_init = force_init
         self.mu_init = mu_init
         self.sig_init = sig_init
 
@@ -167,7 +188,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.verbose_interval = verbose_interval
 
     def _more_tags(self):
-        return {"X_types": "ndarray"}
+        return {"X_types": "2darray"}
 
     def set_init_coeffs(self, coeffs):
         """ Set the initial values of the coefficients via a dict
@@ -178,12 +199,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Contains the wanted values of the initial coefficients,
         if a key is absent the coefficients is set to None
         """
-        keys_coeffs = ["A", "C", "µ_0", "Σ_0"]
+        keys_coeffs = ["A", "C", "force", "µ_0", "Σ_0"]
         init_coeffs = [None] * len(keys_coeffs)
         for n, key in enumerate(keys_coeffs):
             if key in coeffs:
                 init_coeffs[n] = coeffs[key]
-        self.A_init, self.C_init, self.mu_init, self.sig_init = init_coeffs
+        self.A_init, self.C_init, self.force_init, self.mu_init, self.sig_init = init_coeffs
 
     def _check_initial_parameters(self):
         """Check values of the basic parameters.
@@ -204,6 +225,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
             if self.A_init is None:
                 raise ValueError("No initial values for A is provided and init_params is set to user defined")
+            if self.force_init is None:
+                raise ValueError("No initial values for the force is provided and init_params is set to user defined")
             # if self.mu_init is None or self.sig_init is None:
             #     raise ValueError("No initial values for initial conditions are provided and init_params is set to user defined")
 
@@ -227,9 +250,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if not np.all(np.linalg.eigvals(self.sig_init) >= 0):
                 raise ValueError("Provided user values for initial variance of hidden variables is not a definite positive diffusion matrix")
 
-        self.dim_coeffs_force = self.dim_x
-        self.coeffs_force = np.identity(self.dim_x)
-
     def _check_n_features(self, X):
         """Check if we have enough datas to to the fit.
         It is required that  1[time]+2*dim_x[position, velocity]+dim_coeffs_force[force basis] features are present.
@@ -239,13 +259,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X : {ndarray, sparse matrix} of shape (n_samples, n_features)
             The input samples.
         """
-        n_features = X.shape[1]
+        _, n_features = X.shape
         if self.model in ["ABOBA"]:
-            expected_features = 1 + 2 * self.dim_x + self.dim_coeffs_force  # Set the number of expected dimension in in input
+            expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
         elif self.model == "overdamped":
-            expected_features = 1 + self.dim_x + self.dim_coeffs_force  # Set the number of expected dimension in in input
-        if n_features != expected_features:
-            raise ValueError(f"X has {n_features} features, but {self.__class__.__name__} " f"is expecting {expected_features} features as input. Did you forget to add basis features?")
+            expected_features = 1 + self.dim_x  # Set the number of expected dimension in in input
+        self.dim_coeffs_force = n_features - expected_features
+        if self.dim_coeffs_force <= 0:
+            raise ValueError(f"X has {n_features} features, but {self.__class__.__name__} " f"is expecting at least {expected_features} features as input. Did you forget to add basis features?")
 
     def _initialize_parameters(self, suff_stats_visibles, random_state):
         """Initialize the model parameters.
@@ -271,12 +292,18 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             (self.expA, self.SST) = convert_user_coefficients(self.dt, A, C)
         elif self.init_params == "user":
             (self.expA, self.SST) = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+            self.coeffs_force = self.force_init
         elif self.init_params == "markov":
             self._m_step(suff_stats_visibles)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
         if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
             _, self.SST = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+
+        if self.force_init is not None:
+            self.coeffs_force = self.force_init
+        else:
+            self.coeffs_force = np.identity(self.dim_x)
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
             self.mu0 = self.mu_init
