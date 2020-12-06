@@ -124,7 +124,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
 
         n_samples, n_features = xhalf.shape
 
-        if (n_features - 1) // 2 != self.dim_x:
+        if n_features != self.dim_x:
             raise ValueError("X shape does not match training shape")
 
         if self.basis_type == "linear":

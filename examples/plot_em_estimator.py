@@ -1,6 +1,6 @@
 """
 ===========================
-Plotting GLE Estimator
+Running GLE Estimator
 ===========================
 
 An example plot of :class:`GLE_analysisEM.GLE_Estimator`

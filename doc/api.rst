@@ -22,8 +22,5 @@ Basis Features
    :toctree: generated/
    :template: class.rst
 
-   GLE_LinearBasis
+   GLE_BasisTransform
 
-   GLE_PolynomialBasis
-
-   GLE_BSplinesBasis

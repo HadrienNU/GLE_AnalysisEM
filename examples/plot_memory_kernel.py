@@ -1,9 +1,9 @@
 """
 ===========================
-Plotting Template Estimator
+Memory kernel estimation
 ===========================
 
-An example plot of :class:`skltemplate.template.TemplateEstimator`
+An example plot of :class:`GLE_analysisEM.utils.memory_kernel`
 """
 import numpy as np
 from matplotlib import pyplot as plt

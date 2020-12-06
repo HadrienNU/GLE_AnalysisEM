@@ -1,9 +1,9 @@
 """
 ===========================
-Plotting GLE Estimator
+Generating GLE Samples
 ===========================
 
-An example plot of :class:`GLE_analysisEM.GLE_Estimator`
+Generation of sample trajectory via :class:`GLE_analysisEM.GLE_Estimator.sample`
 """
 import numpy as np
 from matplotlib import pyplot as plt
