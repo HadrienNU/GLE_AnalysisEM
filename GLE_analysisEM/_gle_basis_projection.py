@@ -37,16 +37,13 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         products of at most ``degree`` *distinct* input features (so not
         ``x[1] ** 2``, ``x[0] * x[2] ** 3``, etc.).
 
-
-    basis_params :  dict
-        Extra parameters needed for the basis.
     Attributes
     ----------
     basis_type_  : str
         The type of the basis.
     """
 
-    def __init__(self, model="ABOBA", basis_type="linear", degree=1, interaction_only=False, basis_params={}):
+    def __init__(self, model="ABOBA", basis_type="linear", degree=1, interaction_only=False):
 
         self.model = model
 
@@ -54,15 +51,13 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         self.degree = degree
         self.interaction_only = interaction_only
 
-        self.basis_params = basis_params
-
     @staticmethod
     def _combinations(n_features, degree, interaction_only, include_bias):
         comb = combinations if interaction_only else combinations_w_r
         start = int(not include_bias)
         return chain.from_iterable(comb(range(n_features), i) for i in range(start, degree + 1))
 
-    def _check_basis_type(self):
+    def _check_basis_type(self, **basis_params):
         """Check the inputed parameter for the basis type
         """
         if self.basis_type not in ["linear", "polynomial", "hermite", "BSplines"]:
@@ -76,7 +71,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             self.interaction_only = False
             self.include_zeroth_term_ = False
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, **basis_params):
         """A reference implementation of a fitting function for a transformer.
 
         Parameters
@@ -87,14 +82,17 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             There is no need of a target in a transformer, yet the pipeline API
             requires this parameter.
 
+        basis_params :  dict
+            Additional basis parameters.
+
         Returns
         -------
         self : object
             Returns self.
         """
         # Input validation
-        X = check_array(X, ensure_min_samples=4, allow_nd=True)
-        self._check_basis_type()  # Check that input parameters are coherent
+        X = check_array(X, ensure_min_samples=3)
+        self._check_basis_type(**basis_params)  # Check that input parameters are coherent
 
         self.dim_x = (X.shape[1] - 1) // 2
         combinations = self._combinations(self.dim_x, self.degree, self.interaction_only, self.include_zeroth_term_)
@@ -119,7 +117,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         check_is_fitted(self, "n_output_features_")
 
         # Input validation
-        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        X = check_array(X, ensure_min_samples=3)
         dt = X[1, 0] - X[0, 0]
         xhalf = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
 
