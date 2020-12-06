@@ -13,7 +13,8 @@ from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
 from .utils import generateRandomDefPosMat, filter_kalman, smoothing_rauch
-from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, mle_derivative_expA_FDT, preprocessingTraj_aboba, compute_expectation_estep_aboba
+from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, mle_derivative_expA_FDT, preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator
+from ._gle_basis_projection import GLE_BasisTransform
 
 
 def convert_user_coefficients(dt, A, C):
@@ -289,16 +290,16 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     C = np.identity(self.dim_x + self.dim_h)
                 else:
                     C = self.C_init
-            (self.expA, self.SST) = convert_user_coefficients(self.dt, A, C)
+            (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, A, C)
         elif self.init_params == "user":
-            (self.expA, self.SST) = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+            (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, self.A_init, self.C_init)
             self.force_coeffs = self.force_init.reshape(self.dim_x, -1)
         elif self.init_params == "markov":
             self._m_step(suff_stats_visibles)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
         if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
-            _, self.SST = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+            _, self.diffusion_coeffs = convert_user_coefficients(self.dt, self.A_init, self.C_init)
 
         if self.force_init is not None:
             self.force_coeffs = self.force_init.reshape(self.dim_x, -1)
@@ -425,7 +426,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         muh = np.zeros((lenTraj, 2 * self.dim_h))
         Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
 
-        Xtplus, mutilde = compute_expectation_estep(traj, self.expA, self.force_coeffs, self.dim_x, self.dim_h, self.dt, self.model)
+        Xtplus, mutilde = compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt, self.model)
 
         if self.verbose >= 4:
             print("## Forward ##")
@@ -434,7 +435,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigf[0, :, :] = self.sig0
         # Iterate and compute possible value for h at the same point
         for i in range(1, lenTraj):
-            muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.expA[:, self.dim_x :], self.SST, self.dim_x, self.dim_h)
+            muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
 
         # The last step comes only from the forward recursion
         Sigs[-1, :, :] = Sigf[-1, :, :]
@@ -444,13 +445,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.verbose >= 4:
             print("## Backward ##")
         for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
-            mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.expA[:, self.dim_x :], self.SST, self.dim_x, self.dim_h)
+            mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
 
         return muh, Sigh
 
     def _m_step(self, sufficient_stat):
         """M step.
-        .. todo::   -Select dimension of fitted parameters from the sufficient stats
+        .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
                 -Allow to select statistical model (Euler/ ABOBA)
         """
         Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
@@ -464,25 +465,25 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
             YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
             XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
-            self.expA = Id + np.matmul(YX, np.linalg.inv(XX))
+            self.friction_coeffs = Id + np.matmul(YX, np.linalg.inv(XX))
         else:
-            theta0 = self.expA.ravel()  # Starting point of the scipy root algorithm
+            theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
             # To find the better value of the parameters based on the means values
-            sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, np.linalg.inv(self.SST), self.dim_x + self.dim_h), method="hybr")
+            sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, np.linalg.inv(self.diffusion_coeffs), self.dim_x + self.dim_h), method="hybr")
             if not sol.success:
                 print(sol)
                 raise ValueError("M step did not converge")
-            self.expA = sol.x.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+            self.friction_coeffs = sol.x.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
         # Optimize based on  the variance of the sufficients statistics
         if self.OptimizeDiffusion:
-            residuals = sufficient_stat["dxdx"] - np.matmul(self.expA - Id, sufficient_stat["xdx"]) - np.matmul(self.expA - Id, sufficient_stat["xdx"]).T - np.matmul(self.expA + Id, bkdx) - np.matmul(self.expA + Id, bkdx).T
-            residuals += np.matmul(self.expA - Id, np.matmul(sufficient_stat["xx"], (self.expA - Id).T)) + np.matmul(self.expA + Id, np.matmul(bkx, (self.expA - Id).T)) + np.matmul(self.expA + Id, np.matmul(bkx, (self.expA - Id).T)).T
-            residuals += np.matmul(self.expA + Id, np.matmul(bkbk, (self.expA + Id).T))
+            residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
+            residuals += np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
+            residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
             if self.EnforceFDT:  # In which case we only optimize the temperature
-                kbT = (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.SST), residuals))  # Update the temperature
-                self.SST = kbT * (Id - np.matmul(self.expA, self.expA.T))
+                kbT = (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), residuals))  # Update the temperature
+                self.diffusion_coeffs = kbT * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
             else:  # In which case we optimize the full diffusion matrix
-                self.SST = residuals
+                self.diffusion_coeffs = residuals
         self.mu0 = sufficient_stat["µ_0"]
         self.sig0 = sufficient_stat["Σ_0"]
 
@@ -490,21 +491,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Return the current value of the negative log-likelihood
         """
-        Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
-
-        bkbk = np.matmul(Pf, np.matmul(np.matmul(self.force_coeffs, np.matmul(suff_datas["bkbk"], self.force_coeffs.T)), Pf.T))
-        bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, suff_datas["bkdx"]))
-        bkx = np.matmul(Pf, np.matmul(self.force_coeffs, suff_datas["bkx"]))
-
-        Id = np.identity(self.dim_x + self.dim_h)
-        m1 = suff_datas["dxdx"] - np.matmul(self.expA - Id, suff_datas["xdx"]) - np.matmul(self.expA - Id, suff_datas["xdx"]).T - np.matmul(self.expA + Id, bkdx).T - np.matmul(self.expA + Id, bkdx)
-        m1 += np.matmul(self.expA - Id, np.matmul(suff_datas["xx"], (self.expA - Id).T)) + np.matmul(self.expA - Id, np.matmul(bkx.T, (self.expA + Id).T)) + np.matmul(self.expA - Id, np.matmul(bkx.T, (self.expA + Id).T)).T + np.matmul(self.expA + Id, np.matmul(bkbk, (self.expA + Id).T))
-        if self.OptimizeDiffusion:
-            logdet = (self.dim_x + self.dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(self.SST))
-            return -np.trace(np.matmul(np.linalg.inv(self.SST), 0.5 * m1)) - 0.5 * logdet
+        if self.model == "ABOBA":
+            return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt, self.OptimizeDiffusion)
         else:
-            return -np.trace(np.matmul(np.linalg.inv(self.SST), 0.5 * m1))
+            raise ValueError("Model {} not implemented".format(self.model))
 
     def score(self, X, y=None, idx_trajs=[]):
         """Compute the per-sample average log-likelihood of the given data X.
@@ -564,8 +554,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 muh_out = np.hstack((muh_out, muh[:, self.dim_h :]))
         return muh_out
 
-    def sample(self, n_samples=50):
+    def sample(self, n_samples=50, x0=None, v0=None, basis=GLE_BasisTransform()):
         """Generate random samples from the fitted GLE model.
+
+        Use the provided basis to compute the force term. The basis should be fitted first, if not will be fitted using a dummy trajectory.
 
         Parameters
         ----------
@@ -575,19 +567,35 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Returns
         -------
         X : array, shape (n_samples, n_features)
-            Randomly generated sample
+            Randomly generated trajectory
         y : array, shape (nsamples,)
-            Component labels
+            Hidden variables values
         """
-        check_is_fitted(self, "converged_")
-        raise NotImplementedError
+        random_state = check_random_state(self.random_state)
+
+        self.dim_coeffs_force = basis.degree
+        if not (self.warm_start and hasattr(self, "converged_")):
+            self._initialize_parameters(None, random_state)
+        if not hasattr(self, "fitted_"):  # Setup the basis if needed
+            dummytraj = np.zeros((3, 1 + 2 * self.dim_x))
+            basis.fit(dummytraj)
+
+        if x0 is None:
+            x0 = np.zeros((self.dim_x))
+        if v0 is None:
+            v0 = np.zeros((self.dim_x))
+
+        if self.model == "ABOBA":
+            return ABOBA_generator(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, expA=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
+        else:
+            raise ValueError("Model {} not implemented".format(self.model))
 
     def _get_parameters(self):
-        A, C = convert_local_coefficients(self.dt, self.expA, self.SST)
+        A, C = convert_local_coefficients(self.dt, self.friction_coeffs, self.diffusion_coeffs)
         return {"A": A, "C": C, "µ_0": self.mu0, "Σ_0": self.sig0}
 
     def _set_parameters(self, params):
-        (self.expA, self.SST) = convert_user_coefficients(self.dt, params["A"], params["C"])
+        (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, params["A"], params["C"])
         (self.mu0, self.sig0) = (params["µ_0"], params["Σ_0"])
 
     def _n_parameters(self):
@@ -644,9 +652,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 print("***Iteration EM*** :%d / %d\t time lapse %.5fs\t Current loglikelihood %.5f loglikelihood change %.5f" % (n_iter, self.max_iter, cur_time - self._iter_prev_time, log_likelihood, diff_ll))
                 self._iter_prev_time = cur_time
                 print("----------------Current parameters values and diff------------------")
-                print("ExpA", self.expA)
+                print("Friction", self.friction_coeffs)
                 if self.OptimizeDiffusion:
-                    print("SST", self.SST)
+                    print("Diffusion", self.diffusion_coeffs)
 
     def _print_verbose_msg_init_end(self, ll):
         """Print verbose message on the end of iteration."""

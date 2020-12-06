@@ -175,7 +175,7 @@ def m_step_aboba(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, Op
             SST = residuals
 
 
-def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, OptimizeDiffusion):
+def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, withDiffusion):
     """
     Return the current value of the negative log-likelihood
     """
@@ -189,8 +189,35 @@ def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, O
     Id = np.identity(dim_x + dim_h)
     m1 = suff_datas["dxdx"] - np.matmul(expA - Id, suff_datas["xdx"]) - np.matmul(expA - Id, suff_datas["xdx"]).T - np.matmul(expA + Id, bkdx).T - np.matmul(expA + Id, bkdx)
     m1 += np.matmul(expA - Id, np.matmul(suff_datas["xx"], (expA - Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)).T + np.matmul(expA + Id, np.matmul(bkbk, (expA + Id).T))
-    if OptimizeDiffusion:
+    if withDiffusion:
         logdet = (dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
         return -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1)) - 0.5 * logdet
     else:
         return -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1))
+
+
+def ABOBA_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, expA=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
+    """
+    Integrate the equation of nsteps steps
+    """
+
+    x_traj = np.empty((nsteps, dim_x))
+    p_traj = np.empty((nsteps, dim_x))
+    h_traj = np.empty((nsteps, dim_h))
+    t_traj = np.reshape(np.arange(0.0, nsteps) * dt, (-1, 1))
+    x_traj[0, :] = x0
+    p_traj[0, :] = v0
+    h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
+
+    for n in range(1, nsteps):
+        xhalf = x_traj[n - 1, :] + 0.5 * dt * p_traj[n - 1, :]
+        force_t = np.reshape(np.matmul(force_coeffs, basis.predict(np.reshape(xhalf, (1, -1)))), (dim_x,))
+        phalf = p_traj[n - 1, :] + 0.5 * dt * force_t
+
+        gaussp, gaussh = np.split(rng.multivariate_normal(np.zeros((dim_x + dim_h,)), SST), [dim_x])
+        phalfprime = np.matmul(expA[0:dim_x, 0:dim_x], phalf) + np.matmul(expA[0:dim_x, dim_x:], h_traj[n - 1, :]) + gaussp
+        h_traj[n, :] = np.matmul(expA[dim_x:, 0:dim_x], phalf) + np.matmul(expA[dim_x:, dim_x:], h_traj[n - 1, :]) + gaussh
+
+        p_traj[n, :] = phalfprime + 0.5 * dt * force_t
+        x_traj[n, :] = xhalf + 0.5 * dt * p_traj[n, :]
+    return np.hstack((t_traj, x_traj, p_traj)), h_traj
