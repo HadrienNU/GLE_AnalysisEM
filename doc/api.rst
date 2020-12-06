@@ -24,3 +24,13 @@ Basis Features
 
    GLE_BasisTransform
 
+Helper functions
+===================
+.. autosummary::
+   :toctree: generated/
+   :template: function.rst
+   
+   GLE_analysisEM.utils.loadTestDatas_est
+   
+   GLE_analysisEM.utils.memory_kernel
+

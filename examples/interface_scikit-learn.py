@@ -1,9 +1,9 @@
 """
 ===========================
-Plotting GLE Estimator
+Scikit-learn Interface
 ===========================
 
-An example plot of :class:`GLE_analysisEM.GLE_Estimator`
+An example of cross validation for :class:`GLE_analysisEM.GLE_Estimator`
 """
 import pandas as pd
 

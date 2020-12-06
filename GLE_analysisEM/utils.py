@@ -7,6 +7,15 @@ import scipy.linalg
 
 def loadTestDatas_est(paths, dim_x, dim_h):
     """Loads some test trajectories with known hidden variables
+
+    Parameters
+    ----------
+    paths : list of str
+        List of paths to trajectory files, one trajectory per file
+    dim_x : int
+        Visible dimension
+    dim_h : int
+        Hidden dimension         
     """
 
     X = None
@@ -34,6 +43,7 @@ def loadTestDatas_est(paths, dim_x, dim_h):
 def filter_kalman(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h):
     """
     Compute the foward step using Kalman filter, predict and update step
+
     Parameters
     ----------
     mutm, Sigtm: Values of the foward distribution at t-1
@@ -90,11 +100,13 @@ def smoothing_rauch(muft, Sigft, muStp, SigStp, Xtplus, mutilde_t, expAh, SST, d
 def memory_kernel(ntimes, dt, coeffs, dim_x):
     """
     Return the value of the estimated memory kernel
+
     Parameters
     ----------
     ntimes,dt: Number of timestep and timestep
     coeffs : Coefficients for diffusion and friction
     dim_x: Dimension of visible variables
+
     Returns
     -------
     timespan : array-like, shape (n_samples, )
