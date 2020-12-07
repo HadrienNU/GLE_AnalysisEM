@@ -35,9 +35,9 @@ def convert_local_coefficients(dt, expA, SST):
     return A, C
 
 
-def sufficient_stats(traj, dim_x, dim_force, model="ABOBA"):
+def sufficient_stats(traj, dim_x, model="ABOBA"):
     if model == "ABOBA":
-        return sufficient_stats_aboba(traj, dim_x, dim_force)
+        return sufficient_stats_aboba(traj, dim_x)
     else:
         raise ValueError("Model {} not implemented".format(model))
 
@@ -237,17 +237,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if self.EnforceFDT:
                 self.C_init = np.trace(self.C_init) * np.identity(self.dim_x + self.dim_h) / (self.dim_x + self.dim_h)
 
-            expA, SST = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+            expA, SST = convert_user_coefficients(self.dt, np.asarray(self.A_init), np.asarray(self.C_init))
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
 
         if self.mu_init is not None:
-            if self.mu_init.shape != (self.dim_h,):
-                raise ValueError("Provided user values for initial mean of hidden variables have wrong shape, provided {}, wanted {}".format(self.mu_init.shape, (self.dim_h,)))
+            if np.asarray(self.mu_init).shape != (self.dim_h,):
+                raise ValueError("Provided user values for initial mean of hidden variables have wrong shape, provided {}, wanted {}".format(np.asarray(self.mu_init).shape, (self.dim_h,)))
 
         if self.sig_init is not None:
-            if self.sig_init.shape != (self.dim_h, self.dim_h):
-                raise ValueError("Provided user values for initial variance of hidden variables have wrong shape, provided {}, wanted {}".format(self.sig_init.shape, (self.dim_h, self.dim_h)))
+            if np.asarray(self.sig_init).shape != (self.dim_h, self.dim_h):
+                raise ValueError("Provided user values for initial variance of hidden variables have wrong shape, provided {}, wanted {}".format(np.asarray(self.sig_init).shape, (self.dim_h, self.dim_h)))
             if not np.all(np.linalg.eigvals(self.sig_init) >= 0):
                 raise ValueError("Provided user values for initial variance of hidden variables is not a definite positive diffusion matrix")
 
@@ -282,36 +282,36 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.init_params == "random":
             A = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
             if self.EnforceFDT:
-                C = np.identity(self.dim_x + self.dim_h) / (self.dim_x + self.dim_h)  # random_state.standard_exponential() *
+                C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
                 if self.C_init is None:
                     # temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
                     # C = temp_mat + temp_mat.T
                     C = np.identity(self.dim_x + self.dim_h)
                 else:
-                    C = self.C_init
+                    C = np.asarray(self.C_init)
             (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, A, C)
         elif self.init_params == "user":
-            (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, self.A_init, self.C_init)
-            self.force_coeffs = self.force_init.reshape(self.dim_x, -1)
+            (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, np.asarray(self.A_init), np.asarray(self.C_init))
+            self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         elif self.init_params == "markov":
             self._m_step(suff_stats_visibles)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
         if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
-            _, self.diffusion_coeffs = convert_user_coefficients(self.dt, self.A_init, self.C_init)
+            _, self.diffusion_coeffs = convert_user_coefficients(self.dt, np.asarray(self.A_init), np.asarray(self.C_init))
 
         if self.force_init is not None:
-            self.force_coeffs = self.force_init.reshape(self.dim_x, -1)
+            self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
             self.force_coeffs = np.ones(self.dim_coeffs_force).reshape(self.dim_x, -1)
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
-            self.mu0 = self.mu_init
+            self.mu0 = np.asarray(self.mu_init)
         else:
             self.mu0 = np.zeros((self.dim_h))
         if self.sig_init is not None:
-            self.sig0 = self.sig_init
+            self.sig0 = np.asarray(self.sig_init)
         else:
             self.sig0 = np.identity(self.dim_h)
 
@@ -352,27 +352,29 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         random_state = check_random_state(self.random_state)
 
-        self.logL = np.zeros((n_init, self.max_iter))
-        best_params = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
+        self.logL = np.empty((n_init, self.max_iter))
+        self.logL[:] = np.nan
+        best_coeffs = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
         best_n_iter = -1
 
         # Initial evalution of the sufficient statistics for observables
         datas_visible = 0.0
         for traj in traj_list:
-            datas_visible += sufficient_stats(traj, self.dim_x, self.dim_coeffs_force) / len(traj_list)
+            datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
 
         for init in range(n_init):
-            self._print_verbose_msg_init_beg(init)
 
             if do_init:
                 self._initialize_parameters(datas_visible, random_state)
 
-            lower_bound = np.infty if do_init else self.lower_bound_
+            self._print_verbose_msg_init_beg(init)
+            lower_bound = -np.infty if do_init else self.lower_bound_
             # Algorithm loop
             for n_iter in range(1, self.max_iter + 1):
                 prev_lower_bound = lower_bound
                 new_stat = 0.0
                 # hidenS = 0.0
+                self._enforce_degeneracy()
                 for traj in traj_list:
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
                     new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
@@ -384,20 +386,20 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 change = lower_bound - prev_lower_bound
                 self._print_verbose_msg_iter_end(n_iter, change, lower_bound)
 
-                if abs(change) < self.tol:
+                if abs(change) < self.tol and n_iter > 2:  # We require at least 2 iterations
                     self.converged_ = True
                     if not self.no_stop:
                         break
             self._print_verbose_msg_init_end(lower_bound)
             if lower_bound > max_lower_bound:
                 max_lower_bound = lower_bound
-                best_params = self._get_parameters()
+                best_coeffs = self.get_coefficients()
                 best_n_iter = n_iter
 
             if not self.converged_:
                 warnings.warn("Initialization %d did not converge. " "Try different init parameters, " "or increase max_iter, tol " "or check for degenerate data." % (init + 1), ConvergenceWarning)
 
-        self._set_parameters(best_params)
+        self.set_coefficients(best_coeffs)
         self.n_iter_ = best_n_iter
         self.lower_bound_ = max_lower_bound
 
@@ -466,26 +468,42 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
             XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
             self.friction_coeffs = Id + np.matmul(YX, np.linalg.inv(XX))
+            if self.OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
+                residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
+                residuals += (
+                    np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
+                )
+                residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
+                print(residuals)
+                self.diffusion_coeffs = residuals
         else:
             theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
             # To find the better value of the parameters based on the means values
             sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, np.linalg.inv(self.diffusion_coeffs), self.dim_x + self.dim_h), method="hybr")
             if not sol.success:
-                print(sol)
-                raise ValueError("M step did not converge")
+                warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
             self.friction_coeffs = sol.x.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-        # Optimize based on  the variance of the sufficients statistics
-        if self.OptimizeDiffusion:
-            residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
-            residuals += np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
-            residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
-            if self.EnforceFDT:  # In which case we only optimize the temperature
+            # Optimize Diffusion based on the variance of the sufficients statistics
+            if self.OptimizeDiffusion:
+                residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
+                residuals += (
+                    np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
+                )
+                residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
                 kbT = (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), residuals))  # Update the temperature
                 self.diffusion_coeffs = kbT * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
-            else:  # In which case we optimize the full diffusion matrix
-                self.diffusion_coeffs = residuals
         self.mu0 = sufficient_stat["µ_0"]
         self.sig0 = sufficient_stat["Σ_0"]
+
+    def _minimize_wrapper_FDT(self, theta, suff_datas, dim_x, dim_h, dt):
+        """Wrapper to use for the input of the minimize function of scipy
+        """
+
+        return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, dim_x, dim_h, dt, True)
+
+    def _enforce_degeneracy(self):
+        """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients
+        """
 
     def loglikelihood(self, suff_datas):
         """
@@ -520,7 +538,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         new_stat = 0.0
         # hidenS = 0.0
         for traj in traj_list:
-            datas = sufficient_stats(traj, self.dim_x, self.dim_coeffs_force) / len(traj_list)
+            datas = sufficient_stats(traj, self.dim_x) / len(traj_list)
             muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
             new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
             # hidenS += hidden_entropy(traj, global_param)
@@ -590,13 +608,22 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         else:
             raise ValueError("Model {} not implemented".format(self.model))
 
-    def _get_parameters(self):
+    def get_coefficients(self):
+        """Return the actual values of the fitted coefficients.
+        """
         A, C = convert_local_coefficients(self.dt, self.friction_coeffs, self.diffusion_coeffs)
-        return {"A": A, "C": C, "µ_0": self.mu0, "Σ_0": self.sig0}
+        return {"A": A, "C": C, "F": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0}
 
-    def _set_parameters(self, params):
-        (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, params["A"], params["C"])
-        (self.mu0, self.sig0) = (params["µ_0"], params["Σ_0"])
+    def set_coefficients(self, coeffs):
+        """Set the value of the coefficients
+
+        Parameters
+        ----------
+        coeffs : dict
+            Contains the value of the coefficients to set.
+        """
+        (self.friction_coeffs, self.diffusion_coeffs) = convert_user_coefficients(self.dt, np.asarray(coeffs["A"]), np.asarray(coeffs["C"]))
+        (self.force_coeffs, self.mu0, self.sig0) = (coeffs["F"], coeffs["µ_0"], coeffs["Σ_0"])
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
@@ -641,6 +668,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             print("Initialization %d" % n_init)
             self._init_prev_time = time()
             self._iter_prev_time = self._init_prev_time
+        if self.verbose >= 3:
+            print("----------------Current parameters values------------------")
+            print(self.get_coefficients())
 
     def _print_verbose_msg_iter_end(self, n_iter, diff_ll, log_likelihood):
         """Print verbose message on initialization."""
@@ -651,10 +681,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 cur_time = time()
                 print("***Iteration EM*** :%d / %d\t time lapse %.5fs\t Current loglikelihood %.5f loglikelihood change %.5f" % (n_iter, self.max_iter, cur_time - self._iter_prev_time, log_likelihood, diff_ll))
                 self._iter_prev_time = cur_time
-                print("----------------Current parameters values and diff------------------")
-                print("Friction", self.friction_coeffs)
-                if self.OptimizeDiffusion:
-                    print("Diffusion", self.diffusion_coeffs)
+            if self.verbose >= 3:
+                print("----------------Current parameters values------------------")
+                print(self.get_coefficients())
 
     def _print_verbose_msg_init_end(self, ll):
         """Print verbose message on the end of iteration."""
@@ -662,3 +691,5 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             print("Initialization converged: %s" % self.converged_)
         elif self.verbose >= 2:
             print("Initialization converged: %s\t time lapse %.5fs\t ll %.5f" % (self.converged_, time() - self._init_prev_time, ll))
+            print("----------------Current parameters values------------------")
+            print(self.get_coefficients())

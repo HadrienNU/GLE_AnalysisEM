@@ -25,7 +25,7 @@ def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
     return np.hstack((xv_plus_proj, xv_proj, v, bk))
 
 
-def sufficient_stats_aboba(traj, dim_x, dim_force=1):
+def sufficient_stats_aboba(traj, dim_x):
     """
     Given a sample of trajectory, compute the averaged values of the sufficient statistics
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
