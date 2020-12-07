@@ -95,27 +95,46 @@ def sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:]})
 
 
-def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, invSST, dim_tot):
+def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):
     """
     Compute the value of the derivative with respect to expA only for the term related to the FDT (i.e. Sigma)
     """
-    expA = theta.reshape((dim_tot, dim_tot))
+    expA = theta[:-1].reshape((dim_tot, dim_tot))
+    kbT = theta[-1]
     deriv_expA = np.zeros_like(theta)
     # k is the chosen derivative
     YY = dxdx - 2 * (bkdx + bkdx.T) + 4 * bkbk
     YX = xdx.T - 2 * bkx + bkdx.T - 2 * bkbk
     XX = xx + bkx + bkx.T + bkbk
     Id = np.identity(dim_tot)
-    invSSTexpA = np.linalg.inv(Id - np.matmul(expA, expA.T))
+    invSSTexpA = np.linalg.inv(Id - np.matmul(expA, expA.T)) / kbT
     combYX = YY + np.matmul(expA - Id, np.matmul(XX, expA.T - Id)) - np.matmul(YX, expA.T - Id) - np.matmul(YX, expA.T - Id).T
 
     for k in range(dim_tot ** 2):
         DexpA_flat = np.zeros((dim_tot ** 2,))
         DexpA_flat[k] = 1.0
         DexpA = DexpA_flat.reshape((dim_tot, dim_tot))
-        deriv_expA[k] = 2 * np.trace(np.matmul(invSST, np.matmul(np.matmul(expA, Id - np.matmul(combYX, invSSTexpA)), DexpA.T)))
-        deriv_expA[k] += np.trace(np.matmul(invSST, np.matmul(YX - np.matmul(expA - Id, XX), DexpA.T)))
+        deriv_expA[k] = 2 * np.trace(np.matmul(invSSTexpA, np.matmul(np.matmul(expA, Id - np.matmul(combYX, invSSTexpA)), DexpA.T)))
+        deriv_expA[k] += np.trace(np.matmul(invSSTexpA, np.matmul(YX - np.matmul(expA - Id, XX), DexpA.T)))
+    deriv_expA[-1] = dim_tot / kbT - np.trace(np.matmul(combYX, invSSTexpA)) / kbT
+    # print(deriv_expA)
     return deriv_expA
+
+
+def mle_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):
+    """Value of the ml
+    """
+    expA = theta[:-1].reshape((dim_tot, dim_tot))
+    kbT = theta[-1]
+    # k is the chosen derivative
+    YY = dxdx - 2 * (bkdx + bkdx.T) + 4 * bkbk
+    YX = xdx.T - 2 * bkx + bkdx.T - 2 * bkbk
+    XX = xx + bkx + bkx.T + bkbk
+    Id = np.identity(dim_tot)
+    invSSTexpA = np.linalg.inv(Id - np.matmul(expA, expA.T)) / kbT
+    # print(theta, 1 / np.linalg.det(invSSTexpA))
+    combYX = YY + np.matmul(expA - Id, np.matmul(XX, expA.T - Id)) - np.matmul(YX, expA.T - Id) - np.matmul(YX, expA.T - Id).T
+    return np.trace(np.matmul(combYX, invSSTexpA)) - np.log(np.linalg.det(invSSTexpA))
 
 
 def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):

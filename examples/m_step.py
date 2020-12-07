@@ -40,7 +40,7 @@ for n, traj in enumerate(traj_list):
     muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
     datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
 # print(datas["dxdx"], np.linalg.eigvals(datas["dxdx"]))
-est._initialize_parameters(datas_visible, np.random.default_rng())
+est._initialize_parameters(datas_visible, random_state=np.random.default_rng())
 print(est.get_coefficients())
 logL1 = est.loglikelihood(datas)
 est._m_step(datas)

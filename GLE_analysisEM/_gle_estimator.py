@@ -13,7 +13,7 @@ from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
 from .utils import generateRandomDefPosMat, filter_kalman, smoothing_rauch
-from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, mle_derivative_expA_FDT, preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator
+from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, mle_derivative_expA_FDT, preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, mle_FDT
 from ._gle_basis_projection import GLE_BasisTransform
 
 
@@ -219,6 +219,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.max_iter < 1:
             raise ValueError("Invalid value for 'max_iter': %d " "Estimation requires at least one iteration" % self.max_iter)
 
+        if self.EnforceFDT and not self.OptimizeDiffusion:
+            self.OptimizeDiffusion = True
+            warnings.warn("As enforcement of FDT was asked, the diffusion coefficients will be optimized too.")
         if self.init_params == "user":
             if self.n_init != 1:
                 self.n_init = 1
@@ -279,6 +282,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             A random number generator instance that controls the random seed
             used for the method chosen to initialize the parameters.
         """
+        random_state = check_random_state(self.random_state)
         if self.init_params == "random":
             A = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
             if self.EnforceFDT:
@@ -463,42 +467,31 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkdx"]))
         bkx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkx"]))
         Id = np.identity(self.dim_x + self.dim_h)
-        if not self.EnforceFDT:
+        # if not self.EnforceFDT:
 
-            YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
-            XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
-            self.friction_coeffs = Id + np.matmul(YX, np.linalg.inv(XX))
-            if self.OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
-                residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
-                residuals += (
-                    np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
-                )
-                residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
-                self.diffusion_coeffs = residuals
-        else:
-            theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
-            # To find the better value of the parameters based on the means values
-            sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, np.linalg.inv(self.diffusion_coeffs), self.dim_x + self.dim_h), method="hybr")
-            if not sol.success:
-                warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
-            self.friction_coeffs = sol.x.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-            # Optimize Diffusion based on the variance of the sufficients statistics
-            if self.OptimizeDiffusion:
-                residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
-                residuals += (
-                    np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
-                )
-                residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
-                kbT = (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), residuals))  # Update the temperature
-                self.diffusion_coeffs = kbT * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
+        YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
+        XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
+        self.friction_coeffs = Id + np.matmul(YX, np.linalg.inv(XX))
+        if self.OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
+            residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
+            residuals += np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
+            residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
+            self.diffusion_coeffs = residuals
+        # else:
+        theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
+        theta0 = np.hstack((theta0, (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))))))
+        print(theta0)
+        # To find the better value of the parameters based on the means values
+        # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="lm")
+        sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="Nelder-Mead")
+        if not sol.success:
+            warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
+        self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+        self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
+        # else:
+
         self.mu0 = sufficient_stat["µ_0"]
         self.sig0 = sufficient_stat["Σ_0"]
-
-    def _minimize_wrapper_FDT(self, theta, suff_datas, dim_x, dim_h, dt):
-        """Wrapper to use for the input of the minimize function of scipy
-        """
-
-        return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, dim_x, dim_h, dt, True)
 
     def _enforce_degeneracy(self):
         """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients
