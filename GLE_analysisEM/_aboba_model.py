@@ -25,29 +25,23 @@ def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
     return np.hstack((xv_plus_proj, xv_proj, v, bk))
 
 
-def sufficient_stats_aboba(traj, dim_x, dim_force):
+def sufficient_stats_aboba(traj, dim_x, dim_force=1):
     """
     Given a sample of trajectory, compute the averaged values of the sufficient statistics
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
 
-    xx = np.zeros((dim_x, dim_x))
-    xdx = np.zeros_like(xx)
-    dxdx = np.zeros_like(xx)
-    bkx = np.zeros((dim_force, dim_x))
-    bkdx = np.zeros_like(bkx)
-    bkbk = np.zeros((dim_force, dim_force))
+    xval = traj[:, 2 * dim_x : 3 * dim_x]
+    dx = traj[:, :dim_x] - traj[:, dim_x : 2 * dim_x]
+    bk = traj[:, 3 * dim_x :]
+    xx = np.mean(xval[:-1, :, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
+    xdx = np.mean(xval[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    dxdx = np.mean(dx[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    bkx = np.mean(bk[:-1, :, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
+    bkdx = np.mean(bk[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    bkbk = np.mean(bk[:-1, :, np.newaxis] * bk[:-1, np.newaxis, :], axis=0)
 
-    lenTraj = len(traj)
-    for i in range(lenTraj - 1):  # The -1 comes from the last values removed
-        xx += np.outer(traj[i, 2 * dim_x : 3 * dim_x], traj[i, 2 * dim_x : 3 * dim_x])
-        xdx += np.outer(traj[i, 2 * dim_x : 3 * dim_x], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
-        dxdx += np.outer(traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
-        bkx += np.outer(traj[i, 3 * dim_x :], traj[i, 2 * dim_x : 3 * dim_x])
-        bkdx += np.outer(traj[i, 3 * dim_x :], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
-        bkbk += np.outer(traj[i, 3 * dim_x :], traj[i, 3 * dim_x :])
-
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk}) / (lenTraj - 1)
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk})  # / (lenTraj - 1)
 
 
 def sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force):
@@ -67,32 +61,33 @@ def sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_
     bkdx = np.zeros_like(bkx)
     bkdx[:, :dim_x] = old_stats["bkdx"]
 
-    lenTraj = len(traj)
-    for i in range(lenTraj - 1):  # The -1 comes from the last values removed
-        # print(muh[i, dim_h:])
-        xx[dim_x:, dim_x:] += Sigh[i, dim_h:, dim_h:] + np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        xx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], traj[i, 2 * dim_x : 3 * dim_x])
+    xval = traj[:, 2 * dim_x : 3 * dim_x]
+    dx = traj[:, :dim_x] - traj[:, dim_x : 2 * dim_x]
+    bk = traj[:, 3 * dim_x :]
 
-        xdx[dim_x:, dim_x:] += Sigh[i, dim_h:, :dim_h] + np.outer(muh[i, dim_h:], muh[i, :dim_h]) - Sigh[i, dim_h:, dim_h:] - np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        xdx[dim_x:, :dim_x] += np.outer(muh[i, dim_h:], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
-        xdx[:dim_x, dim_x:] += np.outer(traj[i, 2 * dim_x : 3 * dim_x], muh[i, :dim_h] - muh[i, dim_h:])
+    dh = muh[:, :dim_h] - muh[:, dim_h:]
 
-        dxdx[dim_x:, dim_x:] += Sigh[i, :dim_h, :dim_h] + np.outer(muh[i, :dim_h], muh[i, :dim_h]) - 2 * Sigh[i, dim_h:, :dim_h] - np.outer(muh[i, dim_h:], muh[i, :dim_h]) - np.outer(muh[i, :dim_h], muh[i, dim_h:]) + Sigh[i, dim_h:, dim_h:] + np.outer(muh[i, dim_h:], muh[i, dim_h:])
-        dxdx[dim_x:, :dim_x] += np.outer(muh[i, :dim_h] - muh[i, dim_h:], traj[i, :dim_x] - traj[i, dim_x : 2 * dim_x])
+    Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
+    Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
+    Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
 
-        bkx[:, dim_x:] += np.outer(traj[i, 3 * dim_x :], muh[i, dim_h:])
-        bkdx[:, dim_x:] += np.outer(traj[i, 3 * dim_x :], muh[i, :dim_h] - muh[i, dim_h:])
+    muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+    muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+    muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+    muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
 
-    # Normalisation
-    xx[dim_x:, :] /= lenTraj - 1
+    xx[dim_x:, dim_x:] = Sigh_tt + muh_tt
+    xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
 
-    xdx[dim_x:, :] /= lenTraj - 1
-    xdx[:dim_x, dim_x:] /= lenTraj - 1
+    xdx[dim_x:, dim_x:] = Sigh_ttp + muh_ttp - Sigh_tt - muh_tt
+    xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    xdx[:dim_x, dim_x:] = np.mean(xval[:-1, :, np.newaxis] * dh[:-1, np.newaxis, :], axis=0)
 
-    dxdx[dim_x:, :] /= lenTraj - 1
+    dxdx[dim_x:, dim_x:] = Sigh_tptp + muh_tptp - 2 * Sigh_ttp - muh_ttp - muh_tpt + Sigh_tt + muh_tt
+    dxdx[dim_x:, :dim_x] = np.mean(dh[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
 
-    bkx[:, dim_x:] /= lenTraj - 1
-    bkdx[:, dim_x:] /= lenTraj - 1
+    bkx[:, dim_x:] = np.mean(bk[:-1, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+    bkdx[:, dim_x:] = np.mean(bk[:-1, :, np.newaxis] * dh[:-1, np.newaxis, :], axis=0)
 
     xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
     dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
@@ -177,7 +172,7 @@ def m_step_aboba(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, Op
 
 def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, withDiffusion):
     """
-    Return the current value of the negative log-likelihood
+    Return the current value of the log-likelihood
     """
     Pf = np.zeros((dim_x + dim_h, dim_x))
     Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
@@ -190,6 +185,7 @@ def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, w
     m1 = suff_datas["dxdx"] - np.matmul(expA - Id, suff_datas["xdx"]) - np.matmul(expA - Id, suff_datas["xdx"]).T - np.matmul(expA + Id, bkdx).T - np.matmul(expA + Id, bkdx)
     m1 += np.matmul(expA - Id, np.matmul(suff_datas["xx"], (expA - Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)).T + np.matmul(expA + Id, np.matmul(bkbk, (expA + Id).T))
     if withDiffusion:
+        print(SST, np.linalg.eigvals(SST))
         logdet = (dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
         return -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1)) - 0.5 * logdet
     else:
