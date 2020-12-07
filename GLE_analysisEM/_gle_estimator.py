@@ -360,7 +360,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # Initial evalution of the sufficient statistics for observables
         datas_visible = 0.0
         for traj in traj_list:
-            datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
+            datas_visible += sufficient_stats(traj, self.dim_x)
 
         for init in range(n_init):
 
