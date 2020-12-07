@@ -24,9 +24,11 @@ GLE_AnalysisEM - A estimator for Generalized Langevin Equation
 Statistical inference of Generalized Langevin Equation using Expectation-Maximization algorithm
 
 To install the doc do
-.. code-block:: bash
-  cd doc/
-  make html
+.. code-block::
+{
+cd doc/
+make html
+}
 
 And the documation will be available in doc/_build/html/index.html
 
