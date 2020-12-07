@@ -189,7 +189,7 @@ def m_step_aboba(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, Op
             SST = residuals
 
 
-def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, withDiffusion):
+def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt):
     """
     Return the current value of the log-likelihood
     """
@@ -203,11 +203,10 @@ def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, w
     Id = np.identity(dim_x + dim_h)
     m1 = suff_datas["dxdx"] - np.matmul(expA - Id, suff_datas["xdx"]) - np.matmul(expA - Id, suff_datas["xdx"]).T - np.matmul(expA + Id, bkdx).T - np.matmul(expA + Id, bkdx)
     m1 += np.matmul(expA - Id, np.matmul(suff_datas["xx"], (expA - Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)).T + np.matmul(expA + Id, np.matmul(bkbk, (expA + Id).T))
-    if withDiffusion:
-        logdet = (dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
-        return -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1)) - 0.5 * logdet
-    else:
-        return -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1))
+
+    logdet = (dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
+    quad_part = -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1))
+    return quad_part - 0.5 * logdet, quad_part
 
 
 def ABOBA_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, expA=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):

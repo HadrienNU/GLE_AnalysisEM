@@ -50,9 +50,9 @@ def test_m_step_aboba(data):
         muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
         datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
     est._initialize_parameters(datas_visible / len(traj_list), np.random.default_rng())
-    logL1 = est.loglikelihood(datas)
+    logL1, _ = est.loglikelihood(datas)
     est._m_step(datas)
-    logL2 = est.loglikelihood(datas)
+    logL2, _ = est.loglikelihood(datas)
     assert logL2 > logL1
 
 

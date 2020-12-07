@@ -357,7 +357,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         random_state = check_random_state(self.random_state)
 
         self.logL = np.empty((n_init, self.max_iter))
+        self.logL_norm = np.empty((n_init, self.max_iter))
         self.logL[:] = np.nan
+        self.logL_norm[:] == np.nan
         best_coeffs = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
         best_n_iter = -1
 
@@ -385,8 +387,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     # hidenS += hidden_entropy(traj, global_param)
                 self._m_step(new_stat)
 
-                lower_bound = self.loglikelihood(new_stat)
+                lower_bound, lower_bound_norm = self.loglikelihood(new_stat)
                 self.logL[init, n_iter - 1] = lower_bound
+                self.logL_norm[init, n_iter - 1] = lower_bound_norm
                 change = lower_bound - prev_lower_bound
                 self._print_verbose_msg_iter_end(n_iter, change, lower_bound)
 
@@ -441,8 +444,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigf[0, :, :] = self.sig0
         # Iterate and compute possible value for h at the same point
         for i in range(1, lenTraj):
-            muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
-
+            try:
+                muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
+            except np.linalg.LinAlgError:
+                print(i, muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
         # The last step comes only from the forward recursion
         Sigs[-1, :, :] = Sigf[-1, :, :]
         mus[-1, :] = muf[-1, :]
@@ -451,8 +456,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.verbose >= 4:
             print("## Backward ##")
         for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
-            mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
-
+            try:
+                mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
+            except np.linalg.LinAlgError:
+                print(i, muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
         return muh, Sigh
 
     def _m_step(self, sufficient_stat):
@@ -467,7 +474,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkdx"]))
         bkx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkx"]))
         Id = np.identity(self.dim_x + self.dim_h)
-        # if not self.EnforceFDT:
 
         YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
         XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
@@ -477,17 +483,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             residuals += np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
             residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
             self.diffusion_coeffs = residuals
-        # else:
-        theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
-        theta0 = np.hstack((theta0, (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))))))
-        print(theta0)
-        # To find the better value of the parameters based on the means values
-        # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="lm")
-        sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="Nelder-Mead")
-        if not sol.success:
-            warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
-        self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-        self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
+        if self.EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
+            theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
+            theta0 = np.hstack((theta0, (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))))))
+
+            # To find the better value of the parameters based on the means values
+            # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="lm")
+            sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="Nelder-Mead")
+            if not sol.success:
+                warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
+            self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+            self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
         # else:
 
         self.mu0 = sufficient_stat["µ_0"]
@@ -502,7 +508,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Return the current value of the negative log-likelihood
         """
         if self.model == "ABOBA":
-            return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt, self.OptimizeDiffusion)
+            return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
 
@@ -530,11 +536,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         new_stat = 0.0
         # hidenS = 0.0
         for traj in traj_list:
-            datas = sufficient_stats(traj, self.dim_x) / len(traj_list)
+            datas = sufficient_stats(traj, self.dim_x)
             muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
             new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
             # hidenS += hidden_entropy(traj, global_param)
-        return self.loglikelihood(new_stat)  # +hidenS
+        lower_bound, _ = self.loglikelihood(new_stat)
+        return lower_bound  # +hidenS
 
     def predict(self, X, idx_trajs=[]):
         """Predict the hidden variables for the data samples in X using trained model.
