@@ -30,7 +30,7 @@ params = {"em__dim_h": [1, 2], "em__EnforceFDT": [True, False]}  # setting up th
 gs = GridSearchCV(estimator, params, n_jobs=4, cv=2)
 gs.fit(X_train, idx_trajs=idx_train)
 print("Best parameters set found on development set:")
-print(gs.best_params_)
+print(gs.best_coeffs_)
 # building a dataframe from cross-validation data
 df_cv_scores = pd.DataFrame(gs.cv_results_).sort_values(by="rank_test_score")
 print(df_cv_scores)

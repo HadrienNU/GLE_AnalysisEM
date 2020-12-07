@@ -15,7 +15,7 @@ def loadTestDatas_est(paths, dim_x, dim_h):
     dim_x : int
         Visible dimension
     dim_h : int
-        Hidden dimension         
+        Hidden dimension
     """
 
     X = None
@@ -38,6 +38,32 @@ def loadTestDatas_est(paths, dim_x, dim_h):
             X_h = np.vstack((X_h, h))
 
     return X, idx_trajs, X_h
+
+
+def loadDatas_est(paths, dim_x):
+    """Loads some test trajectories with known hidden variables
+
+    Parameters
+    ----------
+    paths : list of str
+        List of paths to trajectory files, one trajectory per file
+    dim_x : int
+        Visible dimension
+    """
+
+    X = None
+    idx_trajs = []
+
+    for chemin in paths:
+        trj = np.loadtxt(chemin)
+        txv = np.asarray(trj[:, : 1 + 2 * dim_x])
+        if X is None:
+            X = txv
+        else:
+            idx_trajs.append(len(X))
+            X = np.vstack((X, txv))
+
+    return X, idx_trajs
 
 
 def filter_kalman(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h):
