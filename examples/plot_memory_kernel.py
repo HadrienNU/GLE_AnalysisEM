@@ -15,7 +15,7 @@ basis = GLE_BasisTransform()
 X = basis.fit_transform(X)
 estimator = GLE_Estimator(verbose=1, C_init=np.identity(2), EnforceFDT=False)
 estimator.fit(X)
-time, kernel = memory_kernel(5000, 5e-3, estimator._get_parameters(), 1)
+time, kernel = memory_kernel(5000, 5e-3, estimator.get_coefficients(), 1)
 time_true, kernel_true = memory_kernel(5000, 5e-3, {"C": np.identity(2), "A": np.array([[5, 1.0], [-2.0, 0.07]])}, 1)
 
 plt.plot(time, kernel[:, 0, 0], label="Fitted memory kernel")

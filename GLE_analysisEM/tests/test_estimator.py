@@ -45,11 +45,11 @@ def test_m_step_aboba(data):
 
     datas = 0.0
     for n, traj in enumerate(traj_list):
-        datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force) / len(traj_list)
+        datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force)
         zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
         muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
         datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
-    est._initialize_parameters(datas_visible, np.random.default_rng())
+    est._initialize_parameters(datas_visible / len(traj_list), np.random.default_rng())
     logL1 = est.loglikelihood(datas)
     est._m_step(datas)
     logL2 = est.loglikelihood(datas)
@@ -70,11 +70,11 @@ def test_e_step_aboba(data):
     traj_list_h = np.split(Xh, idx)
     datas = 0.0
     for n, traj in enumerate(traj_list):
-        datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force) / len(traj_list)
+        datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force)
         zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
         muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
         datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
-    est._initialize_parameters(datas_visible, np.random.default_rng())
+    est._initialize_parameters(datas_visible / len(traj_list), np.random.default_rng())
 
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
     new_stat = sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force)

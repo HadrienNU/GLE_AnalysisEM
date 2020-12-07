@@ -185,7 +185,6 @@ def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt, w
     m1 = suff_datas["dxdx"] - np.matmul(expA - Id, suff_datas["xdx"]) - np.matmul(expA - Id, suff_datas["xdx"]).T - np.matmul(expA + Id, bkdx).T - np.matmul(expA + Id, bkdx)
     m1 += np.matmul(expA - Id, np.matmul(suff_datas["xx"], (expA - Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)).T + np.matmul(expA + Id, np.matmul(bkbk, (expA + Id).T))
     if withDiffusion:
-        print(SST, np.linalg.eigvals(SST))
         logdet = (dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
         return -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1)) - 0.5 * logdet
     else:

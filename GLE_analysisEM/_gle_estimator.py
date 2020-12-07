@@ -474,7 +474,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
                 )
                 residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
-                print(residuals)
                 self.diffusion_coeffs = residuals
         else:
             theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm

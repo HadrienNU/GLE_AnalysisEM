@@ -19,7 +19,7 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", -1)
 
-est = GLE_Estimator(init_params="user", EnforceFDT=False, OptimizeDiffusion=True, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), force_init=np.array([-1]))
+est = GLE_Estimator(init_params="random", EnforceFDT=True, OptimizeDiffusion=True, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), force_init=np.array([-1]))
 est._check_initial_parameters()
 
 X, idx, Xh = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat", "../GLE_analysisEM/tests/1_trajectories.dat", "../GLE_analysisEM/tests/2_trajectories.dat"], 1, 1)
@@ -40,8 +40,6 @@ for n, traj in enumerate(traj_list):
     muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
     datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
 # print(datas["dxdx"], np.linalg.eigvals(datas["dxdx"]))
-print(datas)
-print(datas_vis)
 est._initialize_parameters(datas_visible, np.random.default_rng())
 print(est.get_coefficients())
 logL1 = est.loglikelihood(datas)
