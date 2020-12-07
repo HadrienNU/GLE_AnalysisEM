@@ -25,6 +25,7 @@ Statistical inference of Generalized Langevin Equation using Expectation-Maximiz
 
 To install the doc do
 .. code-block::
+  
 {
 cd doc/
 make html
