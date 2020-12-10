@@ -155,7 +155,7 @@ def memory_kernel(ntimes, dt, coeffs, dim_x):
 def generateRandomDefPosMat(dim_tot=2, rng=np.random.default_rng()):
     """Generate a random value of the A matrix
     """
-    A = rng.standard_normal(size=(dim_tot, dim_tot))
+    A = rng.random(size=(dim_tot, dim_tot))
     if not np.all(np.linalg.eigvals(A + A.T) > 0):
         A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_tot)
     return A

@@ -6,7 +6,7 @@ import pandas as pd
 import scipy.linalg
 
 
-def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
+def preprocessingTraj_euler(X, idx_trajs=[], dim_x=1):
     """
     From position and velocity array compute everything that is needed for the following computation
     """
@@ -25,7 +25,7 @@ def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
     return np.hstack((xv_plus_proj, xv_proj, v, bk))
 
 
-def sufficient_stats_aboba(traj, dim_x):
+def sufficient_stats_euler(traj, dim_x):
     """
     Given a sample of trajectory, compute the averaged values of the sufficient statistics
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -44,7 +44,7 @@ def sufficient_stats_aboba(traj, dim_x):
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk})  # / (lenTraj - 1)
 
 
-def sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force):
+def sufficient_stats_hidden_euler(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force):
     """
     Compute the sufficient statistics averaged over the hidden variable distribution
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -138,7 +138,7 @@ def mle_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):
     return np.trace(np.matmul(combYX, invSSTexpA)) - np.log(np.linalg.det(invSSTexpA))
 
 
-def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
+def compute_expectation_estep_euler(traj, expA, force_coeffs, dim_x, dim_h, dt):
     """
     Compute the value of mutilde and Xtplus
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -152,7 +152,7 @@ def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
     return traj[:, :dim_x], mutilde
 
 
-def m_step_aboba(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, OptimizeDiffusion, dim_h, dt):
+def m_step_euler(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, OptimizeDiffusion, dim_h, dt):
     """M step.
     TODO:   -Select dimension of fitted parameters from the sufficient stats
             -Allow to select statistical model (Euler/ ABOBA)
@@ -190,7 +190,7 @@ def m_step_aboba(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, Op
             SST = residuals
 
 
-def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt):
+def loglikelihood_euler(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt):
     """
     Return the current value of the log-likelihood
     """
@@ -210,7 +210,7 @@ def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt):
     return quad_part - 0.5 * logdet, quad_part
 
 
-def ABOBA_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, expA=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
+def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, expA=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
     """
     Integrate the equation of nsteps steps
     """
