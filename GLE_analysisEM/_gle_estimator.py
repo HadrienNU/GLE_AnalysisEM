@@ -2,6 +2,7 @@
 This the main estimator module
 """
 import numpy as np
+import pandas as pd
 import scipy.linalg
 
 import warnings
@@ -13,7 +14,8 @@ from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
 from .utils import generateRandomDefPosMat, filter_kalman, smoothing_rauch
-from ._aboba_model import sufficient_stats_aboba, sufficient_stats_hidden_aboba, preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, mle_FDT
+from ._aboba_model import preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, m_step_aboba
+from ._euler_model import preprocessingTraj_euler, compute_expectation_estep_euler, loglikelihood_euler, euler_generator, m_step_euler
 from ._gle_basis_projection import GLE_BasisTransform
 
 
@@ -45,23 +47,85 @@ def convert_local_coefficients(dt, expA, SST):
     return A, C
 
 
-def sufficient_stats(traj, dim_x, model="ABOBA"):
-    if model == "ABOBA":
-        return sufficient_stats_aboba(traj, dim_x)
-    else:
-        raise ValueError("Model {} not implemented".format(model))
+def sufficient_stats(traj, dim_x):
+    """
+    Given a sample of trajectory, compute the averaged values of the sufficient statistics
+    Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
+    """
+
+    xval = traj[:, 2 * dim_x : 3 * dim_x]
+    dx = traj[:, :dim_x] - traj[:, dim_x : 2 * dim_x]
+    bk = traj[:, 3 * dim_x :]
+    xx = np.mean(xval[:-1, :, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
+    xdx = np.mean(xval[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    dxdx = np.mean(dx[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    bkx = np.mean(bk[:-1, :, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
+    bkdx = np.mean(bk[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    bkbk = np.mean(bk[:-1, :, np.newaxis] * bk[:-1, np.newaxis, :], axis=0)
+
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk})
 
 
 def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="ABOBA"):
-    if model == "ABOBA":
-        return sufficient_stats_hidden_aboba(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force)
-    else:
-        raise ValueError("Model {} not implemented".format(model))
+    """
+    Compute the sufficient statistics averaged over the hidden variable distribution
+    Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
+    """
+
+    xx = np.zeros((dim_x + dim_h, dim_x + dim_h))
+    xx[:dim_x, :dim_x] = old_stats["xx"]
+    xdx = np.zeros_like(xx)
+    xdx[:dim_x, :dim_x] = old_stats["xdx"]
+    dxdx = np.zeros_like(xx)
+    dxdx[:dim_x, :dim_x] = old_stats["dxdx"]
+    bkx = np.zeros((dim_force, dim_x + dim_h))
+    bkx[:, :dim_x] = old_stats["bkx"]
+    bkdx = np.zeros_like(bkx)
+    bkdx[:, :dim_x] = old_stats["bkdx"]
+
+    xval = traj[:, 2 * dim_x : 3 * dim_x]
+    dx = traj[:, :dim_x] - traj[:, dim_x : 2 * dim_x]
+    bk = traj[:, 3 * dim_x :]
+
+    dh = muh[:, :dim_h] - muh[:, dim_h:]
+
+    Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
+    Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
+    Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
+
+    muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+    muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+    muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+    muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+
+    xx[dim_x:, dim_x:] = Sigh_tt + muh_tt
+    xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
+
+    xdx[dim_x:, dim_x:] = Sigh_ttp + muh_ttp - Sigh_tt - muh_tt
+    xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    xdx[:dim_x, dim_x:] = np.mean(xval[:-1, :, np.newaxis] * dh[:-1, np.newaxis, :], axis=0)
+
+    dxdx[dim_x:, dim_x:] = Sigh_tptp + muh_tptp - 2 * Sigh_ttp - muh_ttp - muh_tpt + Sigh_tt + muh_tt
+    dxdx[dim_x:, :dim_x] = np.mean(dh[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+
+    bkx[:, dim_x:] = np.mean(bk[:-1, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+    bkdx[:, dim_x:] = np.mean(bk[:-1, :, np.newaxis] * dh[:-1, np.newaxis, :], axis=0)
+
+    xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
+    dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
+
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:]})
 
 
 def preprocessingTraj(X, idx_trajs, dim_x, model="ABOBA"):
+    """Model are assumed to be under the form of
+    U_{t+1}(X_{t+1})-V_t(X_t) - friction*W_t(X_t) - force*bk(X_t) where friction and force are dependant of the fitted coefficients
+    This functionr return a data array under the form (U_{t+1}(X_{t+1}),V_t(X_t) ,W_t(X_t),bk(X_t))
+    """
     if model == "ABOBA":
         return preprocessingTraj_aboba(X, idx_trajs=idx_trajs, dim_x=dim_x)
+    elif model == "euler":
+        return preprocessingTraj_euler(X, idx_trajs=idx_trajs, dim_x=dim_x)
     else:
         raise ValueError("Model {} not implemented".format(model))
 
@@ -275,7 +339,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         _, n_features = X.shape
         if self.model in ["ABOBA"]:
             expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
-        elif self.model == "overdamped":
+        elif self.model in ["overdamped", "euler"]:
             expected_features = 1 + self.dim_x  # Set the number of expected dimension in in input
         self.dim_coeffs_force = n_features - expected_features
         if self.dim_coeffs_force <= 0:
@@ -293,7 +357,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         random_state = check_random_state(self.random_state)
         if self.init_params == "random":
-            A = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
+            A = generateRandomDefPosMat(self.dim_x, self.dim_h, random_state)
             if self.EnforceFDT:
                 C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
@@ -447,7 +511,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
 
         if self.model == "ABOBA":
-            Xtplus, mutilde = compute_expectation_estep_aboba(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            Xtplus, mutilde, R = compute_expectation_estep_aboba(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+        elif self.model == "euler":
+            Xtplus, mutilde, R = compute_expectation_estep_euler(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
 
@@ -483,40 +549,52 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
                 -Allow to select statistical model (Euler/ ABOBA)
         """
-        Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
+        if self.model == "ABOBA":
+            friction, force, diffusion = m_step_aboba(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion)
+        elif self.model == "euler":
+            friction, force, diffusion = m_step_euler(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion)
+        else:
+            raise ValueError("Model {} not implemented".format(self.model))
 
-        bkbk = np.matmul(Pf, np.matmul(np.matmul(self.force_coeffs, np.matmul(sufficient_stat["bkbk"], self.force_coeffs.T)), Pf.T))
-        bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkdx"]))
-        bkx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkx"]))
-        Id = np.identity(self.dim_x + self.dim_h)
-
-        YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
-        XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
-        self.friction_coeffs = Id + np.matmul(YX, np.linalg.inv(XX))
-        if self.OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
-            YY = sufficient_stat["dxdx"] - 2 * (bkdx + bkdx.T) + 4 * bkbk
-            residuals = YY + np.matmul(self.friction_coeffs - Id, np.matmul(XX, self.friction_coeffs.T - Id)) - np.matmul(YX, self.friction_coeffs.T - Id) - np.matmul(YX, self.friction_coeffs.T - Id).T
-            # residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
-            # residuals += np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
-            # residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
-            self.diffusion_coeffs = residuals
-        if self.EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
-            theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
-            theta0 = np.hstack((theta0, (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))))))
-
-            # To find the better value of the parameters based on the means values
-            # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="lm")
-            # cons = scipy.optimize.NonlinearConstraint(detConstraints, 1e-10, np.inf)
-            sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="Nelder-Mead")
-            if not sol.success:
-                warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
-            self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-            self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
-        # else:
-
+        self.friction_coeffs = friction
+        self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
         self.sig0 = sufficient_stat["Σ_0"]
+        if self.OptimizeDiffusion:
+            self.diffusion_coeffs = diffusion
+        # -----------------------------------------
+
+        # Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
+        # Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
+        #
+        # bkbk = np.matmul(Pf, np.matmul(np.matmul(self.force_coeffs, np.matmul(sufficient_stat["bkbk"], self.force_coeffs.T)), Pf.T))
+        # bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkdx"]))
+        # bkx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkx"]))
+        # Id = np.identity(self.dim_x + self.dim_h)
+        #
+        # YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
+        # XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
+        # self.friction_coeffs = Id + np.matmul(YX, np.linalg.inv(XX))
+        # if self.OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
+        #     YY = sufficient_stat["dxdx"] - 2 * (bkdx + bkdx.T) + 4 * bkbk
+        #     residuals = YY + np.matmul(self.friction_coeffs - Id, np.matmul(XX, self.friction_coeffs.T - Id)) - np.matmul(YX, self.friction_coeffs.T - Id) - np.matmul(YX, self.friction_coeffs.T - Id).T
+        #     # residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
+        #     # residuals += np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
+        #     # residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
+        #     self.diffusion_coeffs = residuals
+        # # if self.EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
+        # #     theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
+        # #     theta0 = np.hstack((theta0, (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))))))
+        # #
+        # #     # To find the better value of the parameters based on the means values
+        # #     # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="lm")
+        # #     # cons = scipy.optimize.NonlinearConstraint(detConstraints, 1e-10, np.inf)
+        # #     sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="Nelder-Mead")
+        # #     if not sol.success:
+        # #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
+        # #     self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+        # #     self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
+        # print("old", self.friction_coeffs, self.force_coeffs, self.diffusion_coeffs)
 
     def _enforce_degeneracy(self):
         """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients
@@ -528,6 +606,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         if self.model == "ABOBA":
             return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+        elif self.model == "euler":
+            return loglikelihood_euler(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
 
@@ -636,6 +716,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for n in range(n_trajs):
             if self.model == "ABOBA":
                 txv, h = ABOBA_generator(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, expA=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
+            elif self.model == "euler":
+                txv, h = euler_generator(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, expA=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
             else:
                 raise ValueError("Model {} not implemented".format(self.model))
             if X is None:

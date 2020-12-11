@@ -23,10 +23,10 @@ pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", -1)
 
 dim_h = 1
-random_state = None  # 42
+random_state = 42
 
 basis = GLE_BasisTransform(basis_type="linear")
-generator = GLE_Estimator(verbose=1, dim_h=dim_h, EnforceFDT=True, force_init=[-1], init_params="random", random_state=random_state)
+generator = GLE_Estimator(verbose=1, dim_h=dim_h, EnforceFDT=False, force_init=[-1], init_params="random", random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=5000, n_trajs=20, x0=0.0, v0=0.0, basis=basis)
 X = basis.fit_transform(X)
 

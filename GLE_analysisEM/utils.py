@@ -152,12 +152,13 @@ def memory_kernel(ntimes, dt, coeffs, dim_x):
     return dt * np.arange(ntimes), Kernel
 
 
-def generateRandomDefPosMat(dim_tot=2, rng=np.random.default_rng()):
+def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
     """Generate a random value of the A matrix
     """
-    A = rng.random(size=(dim_tot, dim_tot))
+    A = 4 * rng.random(size=(dim_x + dim_h, dim_x + dim_h))
+    A[dim_x:, :dim_x] = 1
     if not np.all(np.linalg.eigvals(A + A.T) > 0):
-        A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_tot)
+        A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)
     return A
 
 
