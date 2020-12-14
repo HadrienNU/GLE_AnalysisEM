@@ -2,150 +2,92 @@
 This the main estimator module
 """
 import numpy as np
-import pandas as pd
-import scipy.linalg
-import warnings
 
 
 def preprocessingTraj_euler(X, idx_trajs=[], dim_x=1):
     """
     From position and velocity array compute everything that is needed for the following computation
     """
-    dt = X[1, 0] - X[0, 0]
-
-    projmat = np.zeros((dim_x, 2 * dim_x))
-    projmat[:dim_x, :dim_x] = 0.5 * dt / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
-    projmat[:dim_x, dim_x : 2 * dim_x] = 1.0 / (1 + (0.5 * dt) ** 2) * np.identity(dim_x)
-    P = projmat.copy()
-    P[:dim_x, dim_x : 2 * dim_x] = (1 + ((0.5 * dt) ** 2 / (1 + (0.5 * dt) ** 2))) * np.identity(dim_x)
-
-    xv_plus_proj = (np.matmul(projmat, np.roll(X[:, 1 : 1 + 2 * dim_x], -1, axis=0).T)).T
-    xv_proj = np.matmul(P, X[:, 1 : 1 + 2 * dim_x].T).T
-    v = X[:, 1 + dim_x : 1 + 2 * dim_x]
+    v = np.roll(X[:, 1 : 1 + dim_x], -1, axis=0) - X[:, 1 : 1 + dim_x]
     bk = X[:, 1 + 2 * dim_x :]
-    return np.hstack((xv_plus_proj, xv_proj, v, bk))
+    v_plus = np.roll(v, -1, axis=0)
+    Xtraj = np.hstack((v_plus, v, v, bk))
+    return np.delete(Xtraj, idx_trajs, axis=0)
 
 
-def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):
-    """
-    Compute the value of the derivative with respect to expA only for the term related to the FDT (i.e. Sigma)
-    """
-    expA = theta[:-1].reshape((dim_tot, dim_tot))
-    kbT = theta[-1]
-    deriv_expA = np.zeros_like(theta)
-    # k is the chosen derivative
-    YY = dxdx - 2 * (bkdx + bkdx.T) + 4 * bkbk
-    YX = xdx.T - 2 * bkx + bkdx.T - 2 * bkbk
-    XX = xx + bkx + bkx.T + bkbk
-    Id = np.identity(dim_tot)
-    invSSTexpA = np.linalg.inv(Id - np.matmul(expA, expA.T)) / kbT
-    combYX = YY + np.matmul(expA - Id, np.matmul(XX, expA.T - Id)) - np.matmul(YX, expA.T - Id) - np.matmul(YX, expA.T - Id).T
-
-    for k in range(dim_tot ** 2):
-        DexpA_flat = np.zeros((dim_tot ** 2,))
-        DexpA_flat[k] = 1.0
-        DexpA = DexpA_flat.reshape((dim_tot, dim_tot))
-        deriv_expA[k] = 2 * np.trace(np.matmul(invSSTexpA, np.matmul(np.matmul(expA, Id - np.matmul(combYX, invSSTexpA)), DexpA.T)))
-        deriv_expA[k] += np.trace(np.matmul(invSSTexpA, np.matmul(YX - np.matmul(expA - Id, XX), DexpA.T)))
-    deriv_expA[-1] = dim_tot / kbT - np.trace(np.matmul(combYX, invSSTexpA)) / kbT
-    # print(deriv_expA)
-    return deriv_expA
-
-
-def mle_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):
-    """Value of the ml
-    """
-    expA = theta[:-1].reshape((dim_tot, dim_tot))
-    kbT = theta[-1]
-    # k is the chosen derivative
-    YY = dxdx - 2 * (bkdx + bkdx.T) + 4 * bkbk
-    YX = xdx.T - 2 * bkx + bkdx.T - 2 * bkbk
-    XX = xx + bkx + bkx.T + bkbk
-    Id = np.identity(dim_tot)
-    invSSTexpA = np.linalg.inv(Id - np.matmul(expA, expA.T)) / kbT
-    # print(theta, 1 / np.linalg.det(invSSTexpA))
-    combYX = YY + np.matmul(expA - Id, np.matmul(XX, expA.T - Id)) - np.matmul(YX, expA.T - Id) - np.matmul(YX, expA.T - Id).T
-
-    return np.trace(np.matmul(combYX, invSSTexpA)) - np.log(np.linalg.det(invSSTexpA))
-
-
-def compute_expectation_estep_euler(traj, expA, force_coeffs, dim_x, dim_h, dt):
+def compute_expectation_estep_euler(traj, A, force_coeffs, dim_x, dim_h, dt):
     """
     Compute the value of mutilde and Xtplus
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
-    Pf = np.zeros((dim_x + dim_h, dim_x))
-    Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
-    mutilde = (
-        np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))
-    ).T
+    mutilde = (np.matmul(A[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T)).T
 
-    return traj[:, :dim_x], mutilde, expA[:, dim_x:]
+    return traj[:, :dim_x], mutilde, A[:, dim_x:]
 
 
-def m_step_euler(sufficient_stat, expA, SST, coeffs_force, dim_x, EnforceFDT, OptimizeDiffusion, dim_h, dt):
+def m_step_euler(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusion):
     """M step.
     TODO:   -Select dimension of fitted parameters from the sufficient stats
-            -Allow to select statistical model (Euler/ ABOBA)
     """
+
+    invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
+    YX = sufficient_stat["xdx"].T - np.matmul(sufficient_stat["bkdx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
+    XX = sufficient_stat["xx"] - np.matmul(sufficient_stat["bkx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
+    A = np.matmul(YX, np.linalg.inv(XX)) / dt
+
     Pf = np.zeros((dim_x + dim_h, dim_x))
-    Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
+    Pf[:dim_x, :dim_x] = dt * np.identity(dim_x)
 
-    bkbk = np.matmul(Pf, np.matmul(np.matmul(coeffs_force, np.matmul(sufficient_stat["bkbk"], coeffs_force.T)), Pf.T))
-    bkdx = np.matmul(Pf, np.matmul(coeffs_force, sufficient_stat["bkdx"]))
-    bkx = np.matmul(Pf, np.matmul(coeffs_force, sufficient_stat["bkx"]))
-    Id = np.identity(dim_x + dim_h)
-    if not EnforceFDT:
+    force_coeffs = (np.matmul(sufficient_stat["bkdx"].T, invbkbk) / dt - np.matmul(A, np.matmul(sufficient_stat["bkx"].T, invbkbk)))[:dim_x, :]
 
-        YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
-        XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
-        expA = Id + np.matmul(YX, np.linalg.inv(XX))
-    else:
-        theta0 = expA.ravel()  # Starting point of the scipy root algorithm
-        # To find the better value of the parameters based on the means values
-        sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, np.linalg.inv(SST), dim_x + dim_h), method="hybr")
-        if not sol.success:
-            print(sol)
-            raise ValueError("M step did not converge")
-        expA = sol.x.reshape((dim_x + dim_h, dim_x + dim_h))
+    if OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
+        bkbk = np.matmul(Pf, np.matmul(np.matmul(force_coeffs, np.matmul(sufficient_stat["bkbk"], force_coeffs.T)), Pf.T))
+        bkdx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkdx"]))
+        bkx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
 
-    # Optimize based on  the variance of the sufficients statistics
-    if OptimizeDiffusion:
-        residuals = sufficient_stat["dxdx"] - np.matmul(expA - Id, sufficient_stat["xdx"]) - np.matmul(expA - Id, sufficient_stat["xdx"]).T - np.matmul(expA + Id, bkdx) - np.matmul(expA + Id, bkdx).T
-        residuals += np.matmul(expA - Id, np.matmul(sufficient_stat["xx"], (expA - Id).T)) + np.matmul(expA + Id, np.matmul(bkx, (expA - Id).T)) + np.matmul(expA + Id, np.matmul(bkx, (expA - Id).T)).T
-        residuals += np.matmul(expA + Id, np.matmul(bkbk, (expA + Id).T))
-        if EnforceFDT:  # In which case we only optimize the temperature
-            kbT = (dim_x + dim_h) / np.trace(np.matmul(np.linalg.inv(SST), residuals))  # Update the temperature
-            SST = kbT * (Id - np.matmul(expA, expA.T))
-        else:  # In which case we optimize the full diffusion matrix
-            SST = residuals
+        residuals = sufficient_stat["dxdx"] - dt * np.matmul(A, sufficient_stat["xdx"]) - dt * np.matmul(A, sufficient_stat["xdx"]).T - bkdx.T - bkdx
+        residuals += dt ** 2 * np.matmul(A, np.matmul(sufficient_stat["xx"], A.T)) + dt * np.matmul(A, bkx.T) + dt * np.matmul(A, bkx.T).T + bkbk
+        SST = residuals
+
+    # if EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
+    #     theta0 = friction_coeffs.ravel()  # Starting point of the scipy root algorithm
+    #     theta0 = np.hstack((theta0, (dim_x + dim_h) / np.trace(np.matmul(np.linalg.inv(diffusion_coeffs), (Id - np.matmul(friction_coeffs, friction_coeffs.T))))))
+    #
+    #     # To find the better value of the parameters based on the means values
+    #     # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, dim_x + dim_h), method="lm")
+    #     # cons = scipy.optimize.NonlinearConstraint(detConstraints, 1e-10, np.inf)
+    #     sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, dim_x + dim_h), method="Nelder-Mead")
+    #     if not sol.success:
+    #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
+    #     friction_coeffs = sol.x[:-1].reshape((dim_x + dim_h, dim_x + dim_h))
+    #     diffusion_coeffs = sol.x[-1] * (Id - np.matmul(friction_coeffs, friction_coeffs.T))
+
+    return A, force_coeffs, SST
 
 
-def loglikelihood_euler(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt):
+def loglikelihood_euler(suff_datas, A, SST, coeffs_force, dim_x, dim_h, dt):
     """
     Return the current value of the log-likelihood
     """
     Pf = np.zeros((dim_x + dim_h, dim_x))
-    Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
+    Pf[:dim_x, :dim_x] = dt * np.identity(dim_x)
 
     bkbk = np.matmul(Pf, np.matmul(np.matmul(coeffs_force, np.matmul(suff_datas["bkbk"], coeffs_force.T)), Pf.T))
     bkdx = np.matmul(Pf, np.matmul(coeffs_force, suff_datas["bkdx"]))
     bkx = np.matmul(Pf, np.matmul(coeffs_force, suff_datas["bkx"]))
 
-    Id = np.identity(dim_x + dim_h)
-    m1 = suff_datas["dxdx"] - np.matmul(expA - Id, suff_datas["xdx"]) - np.matmul(expA - Id, suff_datas["xdx"]).T - np.matmul(expA + Id, bkdx).T - np.matmul(expA + Id, bkdx)
-    m1 += np.matmul(expA - Id, np.matmul(suff_datas["xx"], (expA - Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)).T + np.matmul(expA + Id, np.matmul(bkbk, (expA + Id).T))
+    m1 = suff_datas["dxdx"] - dt * np.matmul(A, suff_datas["xdx"]) - dt * np.matmul(A, suff_datas["xdx"]).T - bkdx.T - bkdx
+    m1 += dt ** 2 * np.matmul(A, np.matmul(suff_datas["xx"], A.T)) + dt * np.matmul(A, bkx.T) + dt * np.matmul(A, bkx.T).T + bkbk
 
     logdet = (dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
     quad_part = -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1))
     return quad_part - 0.5 * logdet, quad_part
 
 
-def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, expA=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
+def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, A=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
     """
     Integrate the equation of nsteps steps
     """
-
     x_traj = np.empty((nsteps, dim_x))
     p_traj = np.empty((nsteps, dim_x))
     h_traj = np.empty((nsteps, dim_h))
@@ -155,14 +97,9 @@ def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, expA=N
     h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
 
     for n in range(1, nsteps):
-        xhalf = x_traj[n - 1, :] + 0.5 * dt * p_traj[n - 1, :]
-        force_t = np.reshape(np.matmul(force_coeffs, basis.predict(np.reshape(xhalf, (1, -1)))), (dim_x,))
-        phalf = p_traj[n - 1, :] + 0.5 * dt * force_t
-
-        gaussp, gaussh = np.split(rng.multivariate_normal(np.zeros((dim_x + dim_h,)), SST), [dim_x])
-        phalfprime = np.matmul(expA[0:dim_x, 0:dim_x], phalf) + np.matmul(expA[0:dim_x, dim_x:], h_traj[n - 1, :]) + gaussp
-        h_traj[n, :] = np.matmul(expA[dim_x:, 0:dim_x], phalf) + np.matmul(expA[dim_x:, dim_x:], h_traj[n - 1, :]) + gaussh
-
-        p_traj[n, :] = phalfprime + 0.5 * dt * force_t
-        x_traj[n, :] = xhalf + 0.5 * dt * p_traj[n, :]
+        x_traj[n, :] = x_traj[n - 1, :] + dt * p_traj[n - 1, :]
+        force_t = np.reshape(np.matmul(force_coeffs, basis.predict(np.reshape(x_traj[n - 1, :], (1, -1)))), (dim_x,))
+        gaussp, gaussh = np.split(rng.multivariate_normal(np.zeros((dim_x + dim_h,)), dt * SST), [dim_x])
+        h_traj[n, :] = h_traj[n - 1, :] + dt * np.matmul(A[dim_x:, 0:dim_x], p_traj[n - 1, :]) + dt * np.matmul(A[dim_x:, dim_x:], h_traj[n - 1, :])
+        p_traj[n, :] = p_traj[n - 1, :] + dt * np.matmul(A[0:dim_x, 0:dim_x], p_traj[n - 1, :]) + dt * np.matmul(A[0:dim_x, dim_x:], h_traj[n - 1, :]) + dt * force_t + gaussh
     return np.hstack((t_traj, x_traj, p_traj)), h_traj

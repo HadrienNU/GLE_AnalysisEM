@@ -2,8 +2,6 @@
 This the main estimator module
 """
 import numpy as np
-import scipy.linalg
-import warnings
 
 
 def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
@@ -85,7 +83,6 @@ def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
 def m_step_aboba(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusion):
     """M step.
     TODO:   -Select dimension of fitted parameters from the sufficient stats
-            -Allow to select statistical model (Euler/ ABOBA)
     """
     Id = np.identity(dim_x + dim_h)
 

@@ -24,13 +24,13 @@ pd.set_option("display.max_colwidth", -1)
 
 dim_h = 1
 random_state = 42
-
-basis = GLE_BasisTransform(basis_type="linear")
-generator = GLE_Estimator(verbose=1, dim_h=dim_h, EnforceFDT=False, force_init=[-1], init_params="random", random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=20, x0=0.0, v0=0.0, basis=basis)
+model = "euler"
+basis = GLE_BasisTransform(basis_type="linear", model=model)
+generator = GLE_Estimator(verbose=1, dim_h=dim_h, EnforceFDT=False, force_init=[-1], init_params="random", model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=2, x0=0.0, v0=0.0, basis=basis)
 X = basis.fit_transform(X)
 
-estimator = GLE_Estimator(init_params="random", dim_h=dim_h, EnforceFDT=True, OptimizeDiffusion=True, no_stop=False, n_init=10, random_state=random_state, verbose=2)
+estimator = GLE_Estimator(init_params="random", dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, n_init=10, random_state=random_state, verbose=2)
 estimator.set_init_coeffs(generator.get_coefficients())
 print(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)

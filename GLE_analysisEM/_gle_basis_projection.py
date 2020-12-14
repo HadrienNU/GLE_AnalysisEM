@@ -120,15 +120,17 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         # Input validation
         X = check_array(X, ensure_min_samples=3)
         dt = X[1, 0] - X[0, 0]
-        xhalf = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-
-        n_samples, n_features = xhalf.shape
+        if self.model in ["ABOBA"]:
+            x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
+        elif self.model in ["euler"]:
+            x_pos = X[:, 1 : 1 + self.dim_x]
+        n_samples, n_features = x_pos.shape
 
         if n_features != self.dim_x:
             raise ValueError("X shape does not match training shape")
 
         if self.basis_type == "linear":
-            bk = xhalf
+            bk = x_pos
         elif self.basis_type == "polynomial":
             bk = np.empty((n_samples, self.n_output_features_), dtype=X.dtype)
 
@@ -150,7 +152,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             current_col = 1
 
             # d = 1
-            bk[:, current_col : current_col + n_features] = xhalf
+            bk[:, current_col : current_col + n_features] = x_pos
             index = list(range(current_col, current_col + n_features))
             current_col += n_features
             index.append(current_col)
@@ -169,7 +171,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
                         break
                     # bk[:, start:end] are terms of degree d - 1
                     # that exclude feature #feature_idx.
-                    np.multiply(bk[:, start:end], xhalf[:, feature_idx : feature_idx + 1], out=bk[:, current_col:next_col], casting="no")
+                    np.multiply(bk[:, start:end], x_pos[:, feature_idx : feature_idx + 1], out=bk[:, current_col:next_col], casting="no")
                     current_col = next_col
 
                 new_index.append(current_col)
@@ -177,10 +179,10 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
 
         elif self.basis_type == "hermite":
             bk = np.empty((n_samples, self.n_output_features_), dtype=X.dtype)
-            bk = xhalf
+            bk = x_pos
         elif self.basis_type == "BSplines":
             bk = np.empty((n_samples, self.n_output_features_), dtype=X.dtype)
-            bk = xhalf
+            bk = x_pos
         return np.hstack((X, bk))
 
     def predict(self, X):
