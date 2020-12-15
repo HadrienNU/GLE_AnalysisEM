@@ -210,7 +210,7 @@ def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
     """Generate a random value of the A matrix
     """
     A = 4 * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h))
-    A[dim_x:, :dim_x] = 1
+    # A[dim_x:, :dim_x] = 1
     if not np.all(np.linalg.eigvals(A + A.T) > 0):
         A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)
     return A
