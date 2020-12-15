@@ -38,7 +38,7 @@ def sufficient_stats(traj, dim_x):
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk})
 
 
-def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="ABOBA"):
+def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="aboba"):
     """
     Compute the sufficient statistics averaged over the hidden variable distribution
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -89,12 +89,12 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:]})
 
 
-def preprocessingTraj(X, idx_trajs, dim_x, model="ABOBA"):
+def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
     """Model are assumed to be under the form of
     U_{t+1}(X_{t+1})-V_t(X_t) - friction*W_t(X_t) - force*bk(X_t) where friction and force are dependant of the fitted coefficients
     This functionr return a data array under the form (U_{t+1}(X_{t+1}),V_t(X_t) ,W_t(X_t),bk(X_t))
     """
-    if model == "ABOBA":
+    if model == "aboba":
         return preprocessingTraj_aboba(X, idx_trajs=idx_trajs, dim_x=dim_x)
     elif model == "euler":
         return preprocessingTraj_euler(X, idx_trajs=idx_trajs, dim_x=dim_x)
@@ -175,7 +175,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     """
 
     def __init__(
-        self, dim_x=1, dim_h=1, tol=1e-3, max_iter=50, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", model="ABOBA", A_init=None, C_init=None, force_init=None, mu_init=None, sig_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10
+        self, dim_x=1, dim_h=1, tol=1e-3, max_iter=50, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", model="aboba", A_init=None, C_init=None, force_init=None, mu_init=None, sig_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10
     ):
         self.dim_x = dim_x
         self.dim_h = dim_h
@@ -234,6 +234,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.max_iter < 1:
             raise ValueError("Invalid value for 'max_iter': %d " "Estimation requires at least one iteration" % self.max_iter)
 
+        self.model = self.model.casefold()
+
+        if self.model not in ["aboba", "euler"]:
+            raise ValueError("Model {} not implemented".format(self.model))
+
         if self.EnforceFDT and not self.OptimizeDiffusion:
             self.OptimizeDiffusion = True
             warnings.warn("As enforcement of FDT was asked, the diffusion coefficients will be optimized too.")
@@ -285,7 +290,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             The input samples.
         """
         _, n_features = X.shape
-        if self.model in ["ABOBA"]:
+        if self.model in ["aboba"]:
             expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
         elif self.model in ["overdamped", "euler"]:
             expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
@@ -329,7 +334,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
-            self.force_coeffs = np.ones(self.dim_coeffs_force).reshape(self.dim_x, -1)
+            self.force_coeffs = np.ones((self.dim_x, self.dim_coeffs_force))
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
             self.mu0 = np.asarray(self.mu_init)
@@ -460,7 +465,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         muh = np.zeros((lenTraj, 2 * self.dim_h))
         Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
 
-        if self.model == "ABOBA":
+        if self.model == "aboba":
             Xtplus, mutilde, R = compute_expectation_estep_aboba(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         elif self.model == "euler":
             Xtplus, mutilde, R = compute_expectation_estep_euler(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
@@ -499,7 +504,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
                 -Allow to select statistical model (Euler/ ABOBA)
         """
-        if self.model == "ABOBA":
+        if self.model == "aboba":
             friction, force, diffusion = m_step_aboba(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion)
         elif self.model == "euler":
             friction, force, diffusion = m_step_euler(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion)
@@ -554,7 +559,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Return the current value of the negative log-likelihood
         """
-        if self.model == "ABOBA":
+        if self.model == "aboba":
             return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         elif self.model == "euler":
             return loglikelihood_euler(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
@@ -648,6 +653,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         random_state = check_random_state(self.random_state)
         self.dt = dt
         self.dim_coeffs_force = basis.degree
+        self._check_initial_parameters()
         if not (self.warm_start and hasattr(self, "converged_")):
             self._initialize_parameters(None, random_state)
         if not hasattr(self, "fitted_"):  # Setup the basis if needed
@@ -664,7 +670,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X_h = None
 
         for n in range(n_trajs):
-            if self.model == "ABOBA":
+            if self.model == "aboba":
                 txv, h = ABOBA_generator(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, expA=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
             elif self.model == "euler":
                 txv, h = euler_generator(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, A=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
@@ -686,7 +692,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Convert the user provided coefficients into the local one
         """
-        if self.model == "ABOBA":
+        if self.model == "aboba":
             friction = scipy.linalg.expm(-1 * self.dt * A)
             diffusion = C - np.matmul(friction, np.matmul(C, friction.T))
         elif self.model == "euler":
@@ -701,7 +707,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Convert the estimator coefficients into the user one
         """
-        if self.model == "ABOBA":
+        if self.model == "aboba":
             A = -scipy.linalg.logm(self.friction_coeffs) / self.dt
             C = scipy.linalg.solve_discrete_lyapunov(self.friction_coeffs, self.diffusion_coeffs)
         elif self.model == "euler":

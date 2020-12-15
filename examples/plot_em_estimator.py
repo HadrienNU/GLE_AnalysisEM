@@ -5,7 +5,7 @@ Running GLE Estimator
 
 An example plot of :class:`GLE_analysisEM.GLE_Estimator`
 """
-# import numpy as np
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
@@ -22,15 +22,17 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", -1)
 
+dim_x = 1
 dim_h = 1
 random_state = 42
 model = "euler"
+force = -np.identity(dim_x)
 basis = GLE_BasisTransform(basis_type="linear", model=model)
-generator = GLE_Estimator(verbose=1, dim_h=dim_h, EnforceFDT=False, force_init=[-1], init_params="random", model=model, random_state=random_state)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=5000, n_trajs=2, x0=0.0, v0=0.0, basis=basis)
 X = basis.fit_transform(X)
 
-estimator = GLE_Estimator(init_params="random", dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, n_init=10, random_state=random_state, verbose=2)
+estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, n_init=1, random_state=random_state, verbose=3)
 estimator.set_init_coeffs(generator.get_coefficients())
 print(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)

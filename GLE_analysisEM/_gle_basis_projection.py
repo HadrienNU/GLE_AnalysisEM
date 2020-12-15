@@ -18,7 +18,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
     dim_x : int, default=1
         The number of visible dimensions.
 
-    model : str, default= "ABOBA"
+    model : str, default= "aboba"
         The statistical model to use
 
     basis_type : str, default={"name": "linear"}
@@ -43,7 +43,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         The type of the basis.
     """
 
-    def __init__(self, model="ABOBA", basis_type="linear", degree=1, interaction_only=False):
+    def __init__(self, model="aboba", basis_type="linear", degree=1, interaction_only=False):
 
         self.model = model
 
@@ -70,6 +70,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             self.degree = 1
             self.interaction_only = False
             self.include_zeroth_term_ = False
+        self.model = self.model.casefold()
 
     def fit(self, X, y=None, **basis_params):
         """A reference implementation of a fitting function for a transformer.
@@ -120,7 +121,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         # Input validation
         X = check_array(X, ensure_min_samples=3)
         dt = X[1, 0] - X[0, 0]
-        if self.model in ["ABOBA"]:
+        if self.model in ["aboba"]:
             x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
         elif self.model in ["euler"]:
             x_pos = X[:, 1 : 1 + self.dim_x]
