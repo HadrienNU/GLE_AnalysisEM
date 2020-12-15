@@ -20,7 +20,7 @@ def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
     xv_proj = np.matmul(P, X[:, 1 : 1 + 2 * dim_x].T).T
     v = X[:, 1 + dim_x : 1 + 2 * dim_x]
     bk = X[:, 1 + 2 * dim_x :]
-    return np.hstack((xv_plus_proj, xv_proj, v, bk))
+    return np.hstack((xv_plus_proj, xv_proj, v, bk)), idx_trajs
 
 
 def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):

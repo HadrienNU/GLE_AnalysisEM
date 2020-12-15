@@ -17,12 +17,11 @@ dim_h = 1
 model = "euler"
 force = -np.identity(dim_x)
 generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=True, force_init=force, init_params="random")
-
 X, idx, h = generator.sample(n_samples=5000, x0=0.0, v0=0.0, basis=basis)
-print(X.shape)
+print(generator.get_coefficients())
 for n in range(dim_h):
     plt.plot(X[:, 0], h[:, n], label="h{}".format(n + 1))
-# plt.plot(X[:, 0], h[:, 1], label="h2")
+
 for n in range(dim_x):
     plt.plot(X[:, 0], X[:, n * 2 + 2], label="v{}".format(n + 1))
     plt.plot(X[:, 0], X[:, n * 2 + 1], label="x{}".format(n + 1))

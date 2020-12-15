@@ -25,15 +25,15 @@ def sufficient_stats(traj, dim_x):
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
 
-    xval = traj[:, 2 * dim_x : 3 * dim_x]
-    dx = traj[:, :dim_x] - traj[:, dim_x : 2 * dim_x]
-    bk = traj[:, 3 * dim_x :]
-    xx = np.mean(xval[:-1, :, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
-    xdx = np.mean(xval[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
-    dxdx = np.mean(dx[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
-    bkx = np.mean(bk[:-1, :, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
-    bkdx = np.mean(bk[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
-    bkbk = np.mean(bk[:-1, :, np.newaxis] * bk[:-1, np.newaxis, :], axis=0)
+    xval = traj[:-1, 2 * dim_x : 3 * dim_x]
+    dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+    bk = traj[:-1, 3 * dim_x :]
+    xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+    xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+    dxdx = np.mean(dx[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+    bkx = np.mean(bk[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+    bkdx = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+    bkbk = np.mean(bk[:, :, np.newaxis] * bk[:, np.newaxis, :], axis=0)
 
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk})
 
@@ -55,11 +55,11 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     bkdx = np.zeros_like(bkx)
     bkdx[:, :dim_x] = old_stats["bkdx"]
 
-    xval = traj[:, 2 * dim_x : 3 * dim_x]
-    dx = traj[:, :dim_x] - traj[:, dim_x : 2 * dim_x]
-    bk = traj[:, 3 * dim_x :]
+    xval = traj[:-1, 2 * dim_x : 3 * dim_x]
+    dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+    bk = traj[:-1, 3 * dim_x :]
 
-    dh = muh[:, :dim_h] - muh[:, dim_h:]
+    dh = muh[:-1, :dim_h] - muh[:-1, dim_h:]
 
     Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
     Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
@@ -71,17 +71,17 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
 
     xx[dim_x:, dim_x:] = Sigh_tt + muh_tt
-    xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:-1, np.newaxis, :], axis=0)
+    xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
 
     xdx[dim_x:, dim_x:] = Sigh_ttp + muh_ttp - Sigh_tt - muh_tt
-    xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
-    xdx[:dim_x, dim_x:] = np.mean(xval[:-1, :, np.newaxis] * dh[:-1, np.newaxis, :], axis=0)
+    xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+    xdx[:dim_x, dim_x:] = np.mean(xval[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
 
     dxdx[dim_x:, dim_x:] = Sigh_tptp + muh_tptp - 2 * Sigh_ttp - muh_ttp - muh_tpt + Sigh_tt + muh_tt
-    dxdx[dim_x:, :dim_x] = np.mean(dh[:-1, :, np.newaxis] * dx[:-1, np.newaxis, :], axis=0)
+    dxdx[dim_x:, :dim_x] = np.mean(dh[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
 
-    bkx[:, dim_x:] = np.mean(bk[:-1, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
-    bkdx[:, dim_x:] = np.mean(bk[:-1, :, np.newaxis] * dh[:-1, np.newaxis, :], axis=0)
+    bkx[:, dim_x:] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+    bkdx[:, dim_x:] = np.mean(bk[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
 
     xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
     dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
@@ -91,7 +91,7 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
 
 def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
     """Model are assumed to be under the form of
-    U_{t+1}(X_{t+1})-V_t(X_t) - friction*W_t(X_t) - force*bk(X_t) where friction and force are dependant of the fitted coefficients
+    U_{t+1}(X_{t+1})-V_t(X_t) - friction*W_t(X_t) - force*bk(X_t) where friction and force are dependent of the fitted coefficients
     This functionr return a data array under the form (U_{t+1}(X_{t+1}),V_t(X_t) ,W_t(X_t),bk(X_t))
     """
     if model == "aboba":
@@ -372,7 +372,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         self._check_n_features(X)
 
-        Xproc = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
+        Xproc, idx_trajs = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
         traj_list = np.split(Xproc, idx_trajs)
         # print(traj_list)
         # if we enable warm_start, we will have a unique initialisation
@@ -388,8 +388,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.logL_norm = np.empty((n_init, self.max_iter))
         self.logL[:] = np.nan
         self.logL_norm[:] = np.nan
-        best_coeffs = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
-        best_n_iter = -1
+        # best_coeffs = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
+        # best_n_iter = -1
 
         # Initial evalution of the sufficient statistics for observables
         datas_visible = 0.0
@@ -427,10 +427,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     self.converged_ = True
                     if not self.no_stop:
                         break
-            if lower_bound > max_lower_bound:
-                max_lower_bound = lower_bound
-                best_coeffs = self.get_coefficients()
-                best_n_iter = n_iter
+                if lower_bound > max_lower_bound:
+                    max_lower_bound = lower_bound
+                    best_coeffs = self.get_coefficients()
+                    best_n_iter = n_iter
             self._print_verbose_msg_init_end(lower_bound, best_n_iter)
 
             if not self.converged_:
@@ -480,19 +480,18 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # Iterate and compute possible value for h at the same point
         for i in range(1, lenTraj):
             # try:
-            muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
+            muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], R, self.diffusion_coeffs, self.dim_x, self.dim_h)
             # except np.linalg.LinAlgError:
             #     print(i, muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
         # The last step comes only from the forward recursion
         Sigs[-1, :, :] = Sigf[-1, :, :]
         mus[-1, :] = muf[-1, :]
-        # print(muf[muf > 1e10], self.friction_coeffs, np.linalg.eigvals(self.diffusion_coeffs))
         # Backward proba
         if self.verbose >= 4:
             print("## Backward ##")
         for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
             # try:
-            mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs, self.dim_x, self.dim_h)
+            mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], R, self.diffusion_coeffs, self.dim_x, self.dim_h)
             # except np.linalg.LinAlgError as e:
             #     print(i, muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
             #     print(repr(e))
@@ -519,24 +518,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.diffusion_coeffs = diffusion
         # -----------------------------------------
 
-        # Pf = np.zeros((self.dim_x + self.dim_h, self.dim_x))
-        # Pf[: self.dim_x, : self.dim_x] = 0.5 * self.dt * np.identity(self.dim_x)
-        #
-        # bkbk = np.matmul(Pf, np.matmul(np.matmul(self.force_coeffs, np.matmul(sufficient_stat["bkbk"], self.force_coeffs.T)), Pf.T))
-        # bkdx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkdx"]))
-        # bkx = np.matmul(Pf, np.matmul(self.force_coeffs, sufficient_stat["bkx"]))
-        # Id = np.identity(self.dim_x + self.dim_h)
-        #
-        # YX = sufficient_stat["xdx"].T - 2 * bkx + bkdx.T - 2 * bkbk
-        # XX = sufficient_stat["xx"] + bkx + bkx.T + bkbk
-        # self.friction_coeffs = Id + np.matmul(YX, np.linalg.inv(XX))
-        # if self.OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
-        #     YY = sufficient_stat["dxdx"] - 2 * (bkdx + bkdx.T) + 4 * bkbk
-        #     residuals = YY + np.matmul(self.friction_coeffs - Id, np.matmul(XX, self.friction_coeffs.T - Id)) - np.matmul(YX, self.friction_coeffs.T - Id) - np.matmul(YX, self.friction_coeffs.T - Id).T
-        #     # residuals = sufficient_stat["dxdx"] - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]) - np.matmul(self.friction_coeffs - Id, sufficient_stat["xdx"]).T - np.matmul(self.friction_coeffs + Id, bkdx) - np.matmul(self.friction_coeffs + Id, bkdx).T
-        #     # residuals += np.matmul(self.friction_coeffs - Id, np.matmul(sufficient_stat["xx"], (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)) + np.matmul(self.friction_coeffs + Id, np.matmul(bkx, (self.friction_coeffs - Id).T)).T
-        #     # residuals += np.matmul(self.friction_coeffs + Id, np.matmul(bkbk, (self.friction_coeffs + Id).T))
-        #     self.diffusion_coeffs = residuals
         # # if self.EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
         # #     theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
         # #     theta0 = np.hstack((theta0, (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))))))
@@ -549,7 +530,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
         # #     self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
         # #     self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
-        # print("old", self.friction_coeffs, self.force_coeffs, self.diffusion_coeffs)
 
     def _enforce_degeneracy(self):
         """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients
@@ -584,7 +564,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X = check_array(X, ensure_min_samples=4, allow_nd=True)
         self._check_n_features(X)
 
-        Xproc = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
+        Xproc, idx_trajs = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
         traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
@@ -614,7 +594,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         check_is_fitted(self, "converged_")
         X = check_array(X, ensure_min_samples=4, allow_nd=True)
         self._check_n_features(X)
-        Xproc = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
+        Xproc, idx_trajs = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
         traj_list = np.split(Xproc, idx_trajs)
         muh_out = None
         for traj in traj_list:
@@ -696,8 +676,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             friction = scipy.linalg.expm(-1 * self.dt * A)
             diffusion = C - np.matmul(friction, np.matmul(C, friction.T))
         elif self.model == "euler":
-            friction = A
-            diffusion = np.matmul(A, C) + np.matmul(C, A.T)
+            friction = A * self.dt
+            diffusion = np.matmul(friction, C) + np.matmul(C, friction.T)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
 
@@ -711,7 +691,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             A = -scipy.linalg.logm(self.friction_coeffs) / self.dt
             C = scipy.linalg.solve_discrete_lyapunov(self.friction_coeffs, self.diffusion_coeffs)
         elif self.model == "euler":
-            A = self.friction_coeffs
+            A = self.friction_coeffs / self.dt
             C = scipy.linalg.solve_continuous_lyapunov(self.friction_coeffs, self.diffusion_coeffs)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
