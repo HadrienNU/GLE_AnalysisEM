@@ -33,19 +33,19 @@ def test_gen_random_mat():
 
 def test_m_step_aboba(data):
     est = GLE_Estimator()
-    est._check_initial_parameters()
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
     basis = GLE_BasisTransform()
     X = basis.fit_transform(X)
+    est.dt = X[1, 0] - X[0, 0]
     est._check_n_features(X)
-
-    Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
+    est._check_initial_parameters()
+    Xproc, idx = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
     traj_list = np.split(Xproc, idx)
     traj_list_h = np.split(Xh, idx)
 
     datas = 0.0
     for n, traj in enumerate(traj_list):
-        datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force)
+        datas_visible = sufficient_stats(traj, est.dim_x)
         zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
         muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
         datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
@@ -59,18 +59,18 @@ def test_m_step_aboba(data):
 def test_e_step_aboba(data):
 
     est = GLE_Estimator(C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), force_init=np.array([-1]), init_params="user")
-    est._check_initial_parameters()
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
     basis = GLE_BasisTransform()
     X = basis.fit_transform(X)
+    est.dt = X[1, 0] - X[0, 0]
     est._check_n_features(X)
-
-    Xproc = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
+    est._check_initial_parameters()
+    Xproc, idx = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x)
     traj_list = np.split(Xproc, idx)
     traj_list_h = np.split(Xh, idx)
     datas = 0.0
     for n, traj in enumerate(traj_list):
-        datas_visible = sufficient_stats(traj, est.dim_x, est.dim_coeffs_force)
+        datas_visible = sufficient_stats(traj, est.dim_x)
         zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
         muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
         datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
@@ -84,11 +84,11 @@ def test_e_step_aboba(data):
 
 def test_em_estimator(data):
     est = GLE_Estimator(verbose=1, C_init=np.identity(2))
-    assert est.dt == 5e-3
     X, idx, Xh = loadTestDatas_est(data, 1, 1)
     basis = GLE_BasisTransform()
     X = basis.fit_transform(X)
     est.fit(X)
+    assert est.dt == 5e-3
     assert hasattr(est, "converged_")
 
     # X = data[0]
