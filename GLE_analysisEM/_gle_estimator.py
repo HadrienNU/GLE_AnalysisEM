@@ -334,7 +334,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
-            self.force_coeffs = np.ones((self.dim_x, self.dim_coeffs_force))
+            self.force_coeffs = -np.ones((self.dim_x, self.dim_coeffs_force))
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
             self.mu0 = np.asarray(self.mu_init)
@@ -423,14 +423,16 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 change = lower_bound - prev_lower_bound
                 self._print_verbose_msg_iter_end(n_iter, change, lower_bound)
 
-                if abs(change) < self.tol or self.dim_h == 0:  # We require at least 2 iterations
-                    self.converged_ = True
-                    if not self.no_stop:
-                        break
                 if lower_bound > max_lower_bound:
                     max_lower_bound = lower_bound
                     best_coeffs = self.get_coefficients()
                     best_n_iter = n_iter
+
+                if abs(change) < self.tol or self.dim_h == 0:  # We require at least 2 iterations
+                    self.converged_ = True
+                    if not self.no_stop:
+                        break
+
             self._print_verbose_msg_init_end(lower_bound, best_n_iter)
 
             if not self.converged_:
