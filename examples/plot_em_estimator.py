@@ -3,7 +3,7 @@
 Running GLE Estimator
 ===========================
 
-An example plot of :class:`GLE_analysisEM.GLE_Estimator`
+Result of the fit as a function of the number of trajectories for :class:`GLE_analysisEM.GLE_Estimator`
 """
 import numpy as np
 import pandas as pd
@@ -27,21 +27,32 @@ dim_h = 1
 random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
+max_iter = 10
+
+nb_trajs = [1, 2, 5, 10, 15, 20, 25]
+to_plot_logL = np.empty((len(nb_trajs), max_iter))
+
 basis = GLE_BasisTransform(basis_type="linear", model=model)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=2, x0=0.0, v0=0.0, basis=basis)
-X = basis.fit_transform(X)
+for k, ntrajs in enumerate(nb_trajs):
+    # Trajectory generation
+    generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
+    X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
+    print("Ntraj: {}".format(ntrajs))
+    # if ntrajs == 1:
+    #     print(generator.get_coefficients())
+    X = basis.fit_transform(X)
 
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, n_init=1, random_state=random_state, verbose=2)
-estimator.set_init_coeffs(generator.get_coefficients())
-print(generator.get_coefficients())
-estimator.fit(X, idx_trajs=idx)
+    # Trajectory estimation
+    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=2)
+    # We set some initial conditions
+    # estimator.set_init_coeffs(generator.get_coefficients())
 
-for n in range(estimator.logL.shape[0]):
-    plt.plot(estimator.logL[n], label="Iter {}".format(n + 1))
-    plt.plot(estimator.logL_norm[n], label="Iter {} Normed".format(n + 1))
-print(estimator.get_coefficients())
-# plt.plot(X[:, 0], estimator.predict(X)[:, 0], label="Prediction")
-# plt.plot(X[:, 0], Xh[:, 0], label="Real")
+    estimator.fit(X, idx_trajs=idx)
+    to_plot_logL[k] = estimator.logL[0]
+
+for k, ntrajs in enumerate(nb_trajs):
+    plt.plot(to_plot_logL[k], label="N trajs {}".format(ntrajs))
+#     plt.plot(estimator.logL_norm[n], label="Iter {} Normed".format(n + 1))
+
 plt.legend(loc="upper right")
 plt.show()

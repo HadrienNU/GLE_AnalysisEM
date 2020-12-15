@@ -114,7 +114,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     dim_h : int, default=1
         The number of hidden dimensions
 
-    tol : float, defaults to 1e-3.
+    tol : float, defaults to 5e-4.
         The convergence threshold. EM iterations will stop when the lower bound average gain is below this threshold.
 
     max_iter: int, default=50
@@ -175,7 +175,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     """
 
     def __init__(
-        self, dim_x=1, dim_h=1, tol=1e-3, max_iter=50, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", model="aboba", A_init=None, C_init=None, force_init=None, mu_init=None, sig_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10
+        self, dim_x=1, dim_h=1, tol=5e-4, max_iter=50, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", model="aboba", A_init=None, C_init=None, force_init=None, mu_init=None, sig_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10
     ):
         self.dim_x = dim_x
         self.dim_h = dim_h
@@ -394,7 +394,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # Initial evalution of the sufficient statistics for observables
         datas_visible = 0.0
         for traj in traj_list:
-            datas_visible += sufficient_stats(traj, self.dim_x)
+            datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
 
         for init in range(n_init):
 
@@ -780,7 +780,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _print_verbose_msg_init_end(self, ll, best_iter):
         """Print verbose message on the end of iteration."""
         if self.verbose == 1:
-            print("Initialization converged: %s at step %i" % self.converged_, best_iter)
+            print("Initialization converged: %s at step %i" % (self.converged_, best_iter))
         elif self.verbose >= 2:
             print("Initialization converged: %s at step %i \t time lapse %.5fs\t ll %.5f" % (self.converged_, best_iter, time() - self._init_prev_time, ll))
             print("----------------Current parameters values------------------")

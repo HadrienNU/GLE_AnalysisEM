@@ -123,6 +123,60 @@ def smoothing_rauch(muft, Sigft, muStp, SigStp, Xtplus, mutilde_t, expAh, SST, d
     return marg_mu, marg_sig, mu_pair, Sig_pair
 
 
+# def filter_kalman_noiseless(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h):
+#     """
+#     Compute the foward step using Kalman filter, predict and update step in the case of no noise on visible variables
+#
+#     Parameters
+#     ----------
+#     mutm, Sigtm: Values of the foward distribution at t-1
+#     Xt, mutilde_tm: Values of the trajectories at T and t-1
+#     expAh, SST: Coefficients parameters["expA"][:, dim_x:] (dim_x+dim_h, dim_h) and SS^T (dim_x+dim_h, dim_x+dim_h)
+#     dim_x,dim_h: Dimension of visibles and hidden variables
+#     """
+#     # Predict step marginalization Normal Gaussian
+#     marg_mu = mutilde_tm + np.matmul(expAh, mutm)
+#     marg_sig = SST + np.matmul(expAh, np.matmul(Sigtm, expAh.T))
+#
+#     # No Update step since that is no noise on visible dimension
+#
+#     R = expAh[dim_x:, :] - np.matmul(Sigtemp[dim_x:, :dim_x], np.matmul(invSYY, expAh[:dim_x, :]))
+#     # Pair probability distibution Z_t,Z_{t-1}
+#     mu_pair = np.hstack((marg_mu, mutm))
+#     Sig_pair = np.zeros((2 * dim_h, 2 * dim_h))
+#     Sig_pair[:dim_h, :dim_h] = marg_sig
+#     Sig_pair[dim_h:, :dim_h] = np.matmul(R, Sigtm)
+#     Sig_pair[:dim_h, dim_h:] = Sig_pair[dim_h:, :dim_h].T
+#     Sig_pair[dim_h:, dim_h:] = Sigtm
+#
+#     return marg_mu, marg_sig, mu_pair, Sig_pair
+#
+#
+# def smoothing_rauch_noiseless(muft, Sigft, muStp, SigStp, Xtplus, mutilde_t, expAh, SST, dim_x, dim_h):
+#     """
+#     Compute the backward step using Kalman smoother in the case of no noise on visible variables
+#     """
+#
+#     invTemp = np.linalg.inv(SST + np.matmul(expAh, np.matmul(Sigft, expAh.T)))
+#     R = np.matmul(np.matmul(Sigft, expAh.T), invTemp)
+#
+#     mu_dym_rev = muft + np.matmul(R[:, :dim_x], Xtplus) - np.matmul(R, np.matmul(expAh, muft) + mutilde_t)
+#     Sig_dym_rev = Sigft - np.matmul(np.matmul(R, expAh), Sigft)
+#
+#     marg_mu = mu_dym_rev + np.matmul(R[:, dim_x:], muStp)
+#     marg_sig = np.matmul(R[:, dim_x:], np.matmul(SigStp, R[:, dim_x:].T)) + Sig_dym_rev
+#
+#     # Pair probability distibution Z_{t+1},Z_{t}
+#     mu_pair = np.hstack((muStp, marg_mu))
+#     Sig_pair = np.zeros((2 * dim_h, 2 * dim_h))
+#     Sig_pair[:dim_h, :dim_h] = SigStp
+#     Sig_pair[dim_h:, :dim_h] = np.matmul(R[:, dim_x:], SigStp)
+#     Sig_pair[:dim_h, dim_h:] = Sig_pair[dim_h:, :dim_h].T
+#     Sig_pair[dim_h:, dim_h:] = marg_sig
+#
+#     return marg_mu, marg_sig, mu_pair, Sig_pair
+
+
 def memory_kernel(ntimes, dt, coeffs, dim_x):
     """
     Return the value of the estimated memory kernel
@@ -155,7 +209,7 @@ def memory_kernel(ntimes, dt, coeffs, dim_x):
 def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
     """Generate a random value of the A matrix
     """
-    A = 4 * rng.random(size=(dim_x + dim_h, dim_x + dim_h))
+    A = 4 * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h))
     A[dim_x:, :dim_x] = 1
     if not np.all(np.linalg.eigvals(A + A.T) > 0):
         A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)

@@ -10,7 +10,8 @@ import pandas as pd
 
 # from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
-from GLE_analysisEM.utils import loadTestDatas_est
+
+# from GLE_analysisEM.utils import loadTestDatas_est
 
 
 # Printing options
