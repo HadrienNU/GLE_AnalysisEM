@@ -13,10 +13,11 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
-from .utils import generateRandomDefPosMat, filter_kalman, smoothing_rauch
+from .utils import generateRandomDefPosMat
 from ._aboba_model import preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, m_step_aboba
 from ._euler_model import preprocessingTraj_euler, compute_expectation_estep_euler, loglikelihood_euler, euler_generator, m_step_euler
 from ._gle_basis_projection import GLE_BasisTransform
+from ._filter_smoother import filtersmoother
 
 
 def sufficient_stats(traj, dim_x):
@@ -465,15 +466,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigh : array-like, shape (n_timstep, 2*dim_h,2*dim_h)
             Covariances of the pair of the hidden variables
         """
-        # Initialize, we are going to use a numpy array for storing intermediate values and put the resulting µh and \Sigma_h into the xarray only at the end
-        lenTraj = len(traj)
-        muf = np.zeros((lenTraj, self.dim_h))
-        Sigf = np.zeros((lenTraj, self.dim_h, self.dim_h))
-        mus = np.zeros((lenTraj, self.dim_h))
-        Sigs = np.zeros((lenTraj, self.dim_h, self.dim_h))
-        # To store the pair probability distibution
-        muh = np.zeros((lenTraj, 2 * self.dim_h))
-        Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
 
         if self.model == "aboba":
             Xtplus, mutilde, R = compute_expectation_estep_aboba(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
@@ -481,32 +473,41 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Xtplus, mutilde, R = compute_expectation_estep_euler(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
-
-        if self.verbose >= 4:
-            print("## Forward ##")
-        # Forward Proba
-        muf[0, :] = self.mu0
-        Sigf[0, :, :] = self.sig0
-        # Iterate and compute possible value for h at the same point
-        for i in range(1, lenTraj):
-            # try:
-            muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], R, self.diffusion_coeffs, self.dim_x, self.dim_h)
-            # except np.linalg.LinAlgError:
-            #     print(i, muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
-        # The last step comes only from the forward recursion
-        Sigs[-1, :, :] = Sigf[-1, :, :]
-        mus[-1, :] = muf[-1, :]
-        # Backward proba
-        if self.verbose >= 4:
-            print("## Backward ##")
-        for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
-            # try:
-            mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], R, self.diffusion_coeffs, self.dim_x, self.dim_h)
-            # except np.linalg.LinAlgError as e:
-            #     print(i, muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
-            #     print(repr(e))
-            #     raise ValueError
-        return muh, Sigh
+        return filtersmoother(Xtplus, mutilde, R, self.diffusion_coeffs, self.mu0, self.sig0, dim_x=self.dim_x, dim_h=self.dim_h)
+        # # Initialize, we are going to use a numpy array for storing intermediate values and put the resulting µh and \Sigma_h into the xarray only at the end
+        # lenTraj = len(traj)
+        # muf = np.zeros((lenTraj, self.dim_h))
+        # Sigf = np.zeros((lenTraj, self.dim_h, self.dim_h))
+        # mus = np.zeros((lenTraj, self.dim_h))
+        # Sigs = np.zeros((lenTraj, self.dim_h, self.dim_h))
+        # # To store the pair probability distibution
+        # muh = np.zeros((lenTraj, 2 * self.dim_h))
+        # Sigh = np.zeros((lenTraj, 2 * self.dim_h, 2 * self.dim_h))
+        # if self.verbose >= 4:
+        #     print("## Forward ##")
+        # # Forward Proba
+        # muf[0, :] = self.mu0
+        # Sigf[0, :, :] = self.sig0
+        # # Iterate and compute possible value for h at the same point
+        # for i in range(1, lenTraj):
+        #     # try:
+        #     muf[i, :], Sigf[i, :, :], muh[i - 1, :], Sigh[i - 1, :, :] = filter_kalman(muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], R, self.diffusion_coeffs, self.dim_x, self.dim_h)
+        #     # except np.linalg.LinAlgError:
+        #     #     print(i, muf[i - 1, :], Sigf[i - 1, :, :], Xtplus[i - 1], mutilde[i - 1], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
+        # # The last step comes only from the forward recursion
+        # Sigs[-1, :, :] = Sigf[-1, :, :]
+        # mus[-1, :] = muf[-1, :]
+        # # Backward proba
+        # if self.verbose >= 4:
+        #     print("## Backward ##")
+        # for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
+        #     # try:
+        #     mus[i, :], Sigs[i, :, :], muh[i, :], Sigh[i, :, :] = smoothing_rauch(muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], R, self.diffusion_coeffs, self.dim_x, self.dim_h)
+        #     # except np.linalg.LinAlgError as e:
+        #     #     print(i, muf[i, :], Sigf[i, :, :], mus[i + 1, :], Sigs[i + 1, :, :], Xtplus[i], mutilde[i], self.friction_coeffs[:, self.dim_x :], self.diffusion_coeffs)
+        #     #     print(repr(e))
+        #     #     raise ValueError
+        # return muh, Sigh
 
     def _m_step(self, sufficient_stat):
         """M step.

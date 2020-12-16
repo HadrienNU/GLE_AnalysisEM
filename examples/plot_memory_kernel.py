@@ -11,7 +11,7 @@ from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 from GLE_analysisEM.utils import memory_kernel
 
 dim_x = 1
-dim_h = 2
+dim_h = 4
 random_state = None
 model = "aboba"
 force = -np.identity(dim_x)
