@@ -123,7 +123,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         dt = X[1, 0] - X[0, 0]
         if self.model in ["aboba"]:
             x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-        elif self.model in ["euler"]:
+        elif self.model in ["euler", "euler_noiseless"]:
             x_pos = X[:, 1 : 1 + self.dim_x]
         n_samples, n_features = x_pos.shape
 

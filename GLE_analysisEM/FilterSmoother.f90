@@ -48,22 +48,38 @@ subroutine filtersmoother(lenTraj, dim_x, dim_h, Xtplus, mutilde, R, diff, mu0, 
   !! Forward Proba
   muf(0,:) = mu0
   Sigf(0, :, :) = Sig0
-  !! Iterate and compute possible value for h at the same point
-  do i=1,lenTraj !! for i in range(1, lenTraj):
-     call filter_kalman(muf(i - 1, :), Sigf(i - 1, :, :), Xtplus(i - 1,:), mutilde(i - 1,:), R,diff, dim_x, dim_h,&
-          muf(i, :), Sigf(i, :, :), muh(i - 1, :), Sigh(i - 1, :, :))
-    
-  end do
+  if (dim_x == 0) then
+     !! Iterate and compute possible value for h at the same point
+     do i=1,lenTraj !! for i in range(1, lenTraj):
+        call filter_kalman_noiseless(muf(i - 1, :), Sigf(i - 1, :, :), mutilde(i - 1,:), R, diff, dim_h,&
+             muf(i, :), Sigf(i, :, :), muh(i - 1, :), Sigh(i - 1, :, :))
+
+     end do
+  else
+     !! Iterate and compute possible value for h at the same point
+     do i=1,lenTraj !! for i in range(1, lenTraj):
+        call filter_kalman(muf(i - 1, :), Sigf(i - 1, :, :), Xtplus(i - 1,:), mutilde(i - 1,:), R,diff, dim_x, dim_h,&
+             muf(i, :), Sigf(i, :, :), muh(i - 1, :), Sigh(i - 1, :, :))
+
+     end do
+  end if
 
   !! The last step comes only from the forward recursion
   Sigs(lenTraj, :, :) = Sigf(lenTraj, :, :)
   mus(lenTraj, :) = muf(lenTraj, :)
   !! Backward proba
-  do i=lenTraj-1,0,-1   !!   for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
-     call smoothing_rauch(muf(i, :), Sigf(i, :, :), mus(i + 1, :), Sigs(i + 1, :, :), &
-          Xtplus(i,:), mutilde(i,:), R, diff, dim_x, dim_h,&
-          mus(i, :), Sigs(i, :, :), muh(i, :), Sigh(i, :, :)) 
-  end do
+  if (dim_x == 0) then
+     do i=lenTraj-1,0,-1   !!   for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
+        call smoothing_rauch_noiseless(muf(i, :), Sigf(i, :, :), mus(i + 1, :), Sigs(i + 1, :, :), &
+             mutilde(i,:), R, diff, dim_h, mus(i, :), Sigs(i, :, :), muh(i, :), Sigh(i, :, :)) 
+     end do
+  else
+     do i=lenTraj-1,0,-1   !!   for i in range(lenTraj - 2, -1, -1):  # From T-1 to 0
+        call smoothing_rauch(muf(i, :), Sigf(i, :, :), mus(i + 1, :), Sigs(i + 1, :, :), &
+             Xtplus(i,:), mutilde(i,:), R, diff, dim_x, dim_h,&
+             mus(i, :), Sigs(i, :, :), muh(i, :), Sigh(i, :, :)) 
+     end do
+  end if
 
 end subroutine filtersmoother
 
@@ -152,6 +168,80 @@ subroutine smoothing_rauch(muft, Sigft, muStp, SigStp, Xtplus, mutilde_t, expAh,
   Sig_pair(1+dim_h:, 1+dim_h:) = marg_sig
   
 end subroutine smoothing_rauch
+
+
+!!$    Compute the foward step using Kalman filter, predict and update step
+!!$    Parameters
+!!$    ----------
+!!$    mutm, Sigtm: Values of the foward distribution at t-1
+!!$    Xt, mutilde_tm: Values of the trajectories at T and t-1
+!!$    expAh, SST: Coefficients parameters["expA"][:, dim_x:] (dim_x+dim_h, dim_h) and SS^T (dim_x+dim_h, dim_x+dim_h)
+!!$    dim_x,dim_h: Dimension of visibles and hidden variables
+subroutine filter_kalman_noiseless(mutm, Sigtm, mutilde_tm, expAhh, SST, dim_h, marg_mu, marg_sig, mu_pair, Sig_pair)
+  implicit none
+  integer,intent(in)::dim_h
+  double precision,dimension(dim_h),intent(in)::mutm
+  double precision,dimension(dim_h,dim_h),intent(in)::Sigtm
+  double precision,dimension(dim_h),intent(in)::mutilde_tm
+  double precision,dimension(dim_h,dim_h),intent(in)::expAhh
+  double precision,dimension(dim_h,dim_h),intent(in)::SST
+  
+  double precision,dimension(dim_h),intent(out)::marg_mu
+  double precision,dimension(dim_h,dim_h),intent(out)::marg_sig
+  double precision,dimension(2*dim_h),intent(out)::mu_pair
+  double precision,dimension(2*dim_h,2*dim_h),intent(out)::Sig_pair
+
+  !! Predict step marginalization Normal Gaussian
+  marg_mu = mutilde_tm + matmul(expAhh, mutm)
+  marg_sig = SST + matmul(expAhh, matmul(Sigtm, transpose(expAhh)))
+
+  !! Pair probability distibution Z_t,Z_{t-1}
+  mu_pair(:dim_h) = marg_mu
+  mu_pair(1+dim_h:) = mutm
+  Sig_pair(:dim_h, :dim_h) = marg_sig
+  Sig_pair(1+dim_h:, :dim_h) = matmul(expAhh, Sigtm)
+  Sig_pair(:dim_h, 1+dim_h:) = transpose(Sig_pair(1+dim_h:, :dim_h))
+  Sig_pair(1+dim_h:, 1+dim_h:) = Sigtm
+  
+end subroutine filter_kalman_noiseless
+
+
+!!$    Compute the backward step using Kalman smoother
+subroutine smoothing_rauch_noiseless(muft, Sigft, muStp, SigStp,  mutilde_t, expAhh, SST&
+     ,  dim_h, marg_mu, marg_sig, mu_pair, Sig_pair)
+  use lapackMod
+  implicit none
+  integer,intent(in)::dim_h
+  double precision,dimension(dim_h),intent(in)::muft,muStp
+  double precision,dimension(dim_h,dim_h),intent(in)::Sigft,SigStp
+  double precision,dimension(dim_h),intent(in)::mutilde_t
+  double precision,dimension(dim_h,dim_h),intent(in)::expAhh
+  double precision,dimension(dim_h,dim_h),intent(in)::SST
+
+  double precision,dimension(dim_h),intent(out)::marg_mu
+  double precision,dimension(dim_h,dim_h),intent(out)::marg_sig
+  double precision,dimension(2*dim_h),intent(out)::mu_pair
+  double precision,dimension(2*dim_h,2*dim_h),intent(out)::Sig_pair
+
+  double precision,dimension(dim_h,dim_h)::invTemp
+  double precision,dimension(dim_h,dim_h)::R
+  
+  invTemp = inv(SST + matmul(expAhh, matmul(Sigft, transpose(expAhh))))
+  R = matmul(matmul(Sigft, transpose(expAhh)), invTemp)
+
+  marg_mu =  muft - matmul(R, matmul(expAhh, muft) + mutilde_t) + matmul(R, muStp)
+  marg_sig = matmul(R, matmul(SigStp, transpose(R))) + Sigft - matmul(matmul(R, expAhh), Sigft)
+
+  !! Pair probability distibution Z_{t+1},Z_{t}
+  mu_pair(:dim_h) = muStp
+  mu_pair(1+dim_h:) = marg_mu
+
+  Sig_pair(:dim_h, :dim_h) = SigStp
+  Sig_pair(1+dim_h:, :dim_h) = matmul(R, SigStp)
+  Sig_pair(:dim_h, 1+dim_h:) = transpose(Sig_pair(1+dim_h:, :dim_h))
+  Sig_pair(1+dim_h:, 1+dim_h:) = marg_sig
+  
+end subroutine smoothing_rauch_noiseless
 
 
 

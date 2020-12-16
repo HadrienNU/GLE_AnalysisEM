@@ -122,7 +122,7 @@ def smoothing_rauch(muft, Sigft, muStp, SigStp, Xtplus, mutilde_t, expAh, SST, d
     return marg_mu, marg_sig, mu_pair, Sig_pair
 
 
-def memory_kernel(ntimes, dt, coeffs, dim_x):
+def memory_kernel(ntimes, dt, coeffs, dim_x, noDirac=False):
     """
     Return the value of the estimated memory kernel
 
@@ -131,6 +131,7 @@ def memory_kernel(ntimes, dt, coeffs, dim_x):
     ntimes,dt: Number of timestep and timestep
     coeffs : Coefficients for diffusion and friction
     dim_x: Dimension of visible variables
+    noDirac: Remove the dirac at time zero
 
     Returns
     -------
@@ -147,7 +148,8 @@ def memory_kernel(ntimes, dt, coeffs, dim_x):
     Kernel = np.zeros((ntimes, dim_x, dim_x))
     for n in range(ntimes):
         Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * n * dt * Ahh), Ahv))
-    Kernel[0, :, :] += 2 * Avv
+    if not noDirac:
+        Kernel[0, :, :] += 2 * Avv
     return dt * np.arange(ntimes), Kernel
 
 

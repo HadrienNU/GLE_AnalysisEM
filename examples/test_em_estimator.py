@@ -25,7 +25,7 @@ pd.set_option("display.max_colwidth", -1)
 dim_x = 1
 dim_h = 2
 random_state = 42
-model = "aboba"
+model = "euler_noiseless"
 force = -np.identity(dim_x)
 max_iter = 10
 
@@ -35,7 +35,7 @@ basis = GLE_BasisTransform(basis_type="linear", model=model)
 
 # Trajectory generation
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=50000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
 print("Real parameters", generator.get_coefficients())
 X = basis.fit_transform(X)
 
