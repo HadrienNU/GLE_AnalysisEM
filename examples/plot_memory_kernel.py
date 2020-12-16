@@ -11,7 +11,7 @@ from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 from GLE_analysisEM.utils import memory_kernel
 
 dim_x = 1
-dim_h = 1
+dim_h = 2
 random_state = None
 model = "aboba"
 force = -np.identity(dim_x)
@@ -20,10 +20,10 @@ max_iter = 10
 # X, idx, Xh = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat", "../GLE_analysisEM/tests/1_trajectories.dat", "../GLE_analysisEM/tests/2_trajectories.dat"], 1, 1)
 basis = GLE_BasisTransform()
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=20, x0=0.0, v0=0.0, basis=basis)
-
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=50, x0=0.0, v0=0.0, basis=basis)
+print(generator.get_coefficients())
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False)
+estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False)
 estimator.fit(X)
 time, kernel = memory_kernel(5000, estimator.dt, estimator.get_coefficients(), dim_x)
 time_true, kernel_true = memory_kernel(5000, generator.dt, generator.get_coefficients(), dim_x)

@@ -29,30 +29,25 @@ model = "aboba"
 force = -np.identity(dim_x)
 max_iter = 10
 
-nb_trajs = [1, 2, 5, 10, 15, 20, 25]
-to_plot_logL = np.empty((len(nb_trajs), max_iter))
+ntrajs = 3
 
 basis = GLE_BasisTransform(basis_type="linear", model=model)
-for k, ntrajs in enumerate(nb_trajs):
-    # Trajectory generation
-    generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-    X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
-    print("Ntraj: {}".format(ntrajs))
-    if k == 0:
-        print("Real parameters", generator.get_coefficients())
-    X = basis.fit_transform(X)
 
-    # Trajectory estimation
-    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=2)
-    # We set some initial conditions
-    # estimator.set_init_coeffs(generator.get_coefficients())
+# Trajectory generation
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=50000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
+print("Real parameters", generator.get_coefficients())
+X = basis.fit_transform(X)
 
-    estimator.fit(X, idx_trajs=idx)
-    to_plot_logL[k] = estimator.logL[0]
+# Trajectory estimation
+estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=2, verbose_interval=1)
+# We set some initial conditions
+# estimator.set_init_coeffs(generator.get_coefficients())
+estimator.fit(X, idx_trajs=idx)
 
-for k, ntrajs in enumerate(nb_trajs):
-    plt.plot(to_plot_logL[k], label="N trajs {}".format(ntrajs))
-#     plt.plot(estimator.logL_norm[n], label="Iter {} Normed".format(n + 1))
 
+plt.plot(estimator.logL[0], label="Log L")
+plt.plot(estimator.logL_hS[0], label="HS")
+plt.plot(estimator.logL[0] + estimator.logL_hS[0], label="Sum")
 plt.legend(loc="upper right")
 plt.show()

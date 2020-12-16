@@ -206,6 +206,13 @@ def memory_kernel(ntimes, dt, coeffs, dim_x):
     return dt * np.arange(ntimes), Kernel
 
 
+def memory_timescales(coeffs, dim_x):
+    """
+    Compute the eigenvalues of A_hh to get the timescale of the memory
+    """
+    return np.linalg.eigvals(coeffs["A"][dim_x:, dim_x:])
+
+
 def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
     """Generate a random value of the A matrix
     """

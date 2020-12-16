@@ -43,7 +43,7 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     Compute the sufficient statistics averaged over the hidden variable distribution
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
-
+    # print("Suff_stats")
     xx = np.zeros((dim_x + dim_h, dim_x + dim_h))
     xx[:dim_x, :dim_x] = old_stats["xx"]
     xdx = np.zeros_like(xx)
@@ -63,13 +63,13 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
 
     Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
     Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
+    Sigh_tpt = np.mean(Sigh[:-1, :dim_h, dim_h:], axis=0)
     Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
 
     muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
     muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
     muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
     muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
-
     xx[dim_x:, dim_x:] = Sigh_tt + muh_tt
     xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
 
@@ -77,7 +77,7 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
     xdx[:dim_x, dim_x:] = np.mean(xval[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
 
-    dxdx[dim_x:, dim_x:] = Sigh_tptp + muh_tptp - 2 * Sigh_ttp - muh_ttp - muh_tpt + Sigh_tt + muh_tt
+    dxdx[dim_x:, dim_x:] = Sigh_tptp + muh_tptp - Sigh_ttp - Sigh_tpt - muh_ttp - muh_tpt + Sigh_tt + muh_tt
     dxdx[dim_x:, :dim_x] = np.mean(dh[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
 
     bkx[:, dim_x:] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
@@ -87,6 +87,14 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
 
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:]})
+
+
+def hidden_entropy(Sigh, dim_h):
+    """
+    Compute the entropy of the distribution of the hidden states
+    """
+    det = np.linalg.det(Sigh[:-1, :, :])
+    return 0.5 * 2 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(det[det > 1e-12]).mean()
 
 
 def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
@@ -385,9 +393,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         random_state = check_random_state(self.random_state)
 
         self.logL = np.empty((n_init, self.max_iter))
-        self.logL_norm = np.empty((n_init, self.max_iter))
+        self.logL_hS = np.empty((n_init, self.max_iter))
         self.logL[:] = np.nan
-        self.logL_norm[:] = np.nan
+        self.logL_hS[:] = np.nan
         # best_coeffs = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
         # best_n_iter = -1
 
@@ -407,19 +415,19 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             for n_iter in range(1, self.max_iter + 1):
                 prev_lower_bound = lower_bound
                 new_stat = 0.0
-                # hidenS = 0.0
+                hidenS = 0.0
                 self._enforce_degeneracy()
                 for traj in traj_list:
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
                     new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
-                    # hidenS += hidden_entropy(traj, global_param)
+                    hidenS += hidden_entropy(Sigh, self.dim_h) / len(traj_list)
 
                 lower_bound, lower_bound_norm = self.loglikelihood(new_stat)
 
                 self._m_step(new_stat)
 
                 self.logL[init, n_iter - 1] = lower_bound
-                self.logL_norm[init, n_iter - 1] = lower_bound_norm
+                self.logL_hS[init, n_iter - 1] = hidenS
                 change = lower_bound - prev_lower_bound
                 self._print_verbose_msg_iter_end(n_iter, change, lower_bound)
 
@@ -704,7 +712,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """Return the actual values of the fitted coefficients.
         """
         A, C = self._convert_local_coefficients()
-        return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "expA": self.friction_coeffs, "SST": self.diffusion_coeffs}
+        return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs}
 
     def set_coefficients(self, coeffs):
         """Set the value of the coefficients

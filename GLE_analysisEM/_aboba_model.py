@@ -105,8 +105,10 @@ def m_step_aboba(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusio
 
         residuals = sufficient_stat["dxdx"] - np.matmul(expA - Id, sufficient_stat["xdx"]) - np.matmul(expA - Id, sufficient_stat["xdx"]).T - np.matmul(expA + Id, bkdx).T - np.matmul(expA + Id, bkdx)
         residuals += np.matmul(expA - Id, np.matmul(sufficient_stat["xx"], (expA - Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)) + np.matmul(expA - Id, np.matmul(bkx.T, (expA + Id).T)).T + np.matmul(expA + Id, np.matmul(bkbk, (expA + Id).T))
-        SST = residuals
+        SST = 0.5 * (residuals + residuals.T)
 
+    else:
+        SST = 1.0
     # if EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
     #     theta0 = friction_coeffs.ravel()  # Starting point of the scipy root algorithm
     #     theta0 = np.hstack((theta0, (dim_x + dim_h) / np.trace(np.matmul(np.linalg.inv(diffusion_coeffs), (Id - np.matmul(friction_coeffs, friction_coeffs.T))))))
