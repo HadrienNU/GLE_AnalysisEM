@@ -157,14 +157,16 @@ def ABOBA_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, expA=N
     x_traj[0, :] = x0
     p_traj[0, :] = v0
     h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
-
+    S = np.linalg.cholesky(SST)
     for n in range(1, nsteps):
         xhalf = x_traj[n - 1, :] + 0.5 * dt * p_traj[n - 1, :]
         force_t = np.matmul(force_coeffs, basis.predict(np.reshape(xhalf, (1, -1)))[0])  # The [0] because predict return an n_timestep*n_features array
         phalf = p_traj[n - 1, :] + 0.5 * dt * force_t
-        gaussp, gaussh = np.split(rng.multivariate_normal(np.zeros((dim_x + dim_h,)), SST), [dim_x])
-        phalfprime = np.matmul(expA[0:dim_x, 0:dim_x], phalf) + np.matmul(expA[0:dim_x, dim_x:], h_traj[n - 1, :]) + gaussp
-        h_traj[n, :] = np.matmul(expA[dim_x:, 0:dim_x], phalf) + np.matmul(expA[dim_x:, dim_x:], h_traj[n - 1, :]) + gaussh
+        gauss = np.matmul(S, rng.standard_normal(size=dim_x + dim_h))
+        # gaussp, gaussh = np.split(rng.multivariate_normal(np.zeros((dim_x + dim_h,)), SST), [dim_x])
+
+        phalfprime = np.matmul(expA[0:dim_x, 0:dim_x], phalf) + np.matmul(expA[0:dim_x, dim_x:], h_traj[n - 1, :]) + gauss[:dim_x]
+        h_traj[n, :] = np.matmul(expA[dim_x:, 0:dim_x], phalf) + np.matmul(expA[dim_x:, dim_x:], h_traj[n - 1, :]) + gauss[dim_x:]
 
         p_traj[n, :] = phalfprime + 0.5 * dt * force_t
         x_traj[n, :] = xhalf + 0.5 * dt * p_traj[n, :]

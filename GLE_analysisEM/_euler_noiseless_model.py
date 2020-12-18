@@ -112,11 +112,12 @@ def euler_generator_nl(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, A=N
     x_traj[0, :] = x0
     p_traj[0, :] = v0
     h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
-
+    S = np.linalg.cholesky(SST)
     for n in range(1, nsteps):
         x_traj[n, :] = x_traj[n - 1, :] + dt * p_traj[n - 1, :]
         force_t = dt * np.matmul(force_coeffs, basis.predict(np.reshape(x_traj[n - 1, :], (1, -1)))[0])
-        gaussh = rng.multivariate_normal(np.zeros((dim_h,)), SST)
+        # gaussh = rng.multivariate_normal(np.zeros((dim_h,)), SST)
+        gaussh = np.matmul(S, rng.standard_normal(size=dim_h))
         h_traj[n, :] = h_traj[n - 1, :] - np.matmul(A[dim_x:, :dim_x], p_traj[n - 1, :]) - np.matmul(A[dim_x:, dim_x:], h_traj[n - 1, :]) + gaussh
         p_traj[n, :] = p_traj[n - 1, :] - np.matmul(A[:dim_x, :dim_x], p_traj[n - 1, :]) - np.matmul(A[:dim_x, dim_x:], h_traj[n - 1, :]) + force_t
     return np.hstack((t_traj, x_traj, p_traj)), h_traj
