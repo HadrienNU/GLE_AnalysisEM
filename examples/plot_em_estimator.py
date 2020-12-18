@@ -27,7 +27,7 @@ dim_h = 2
 random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
-max_iter = 10
+max_iter = 100
 
 nb_trajs = [1, 2, 5, 10, 15, 20, 25]
 to_plot_logL = np.empty((len(nb_trajs), max_iter))
@@ -43,11 +43,12 @@ for k, ntrajs in enumerate(nb_trajs):
     X = basis.fit_transform(X)
 
     # Trajectory estimation
-    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=2)
+    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1)
     # We set some initial conditions
     # estimator.set_init_coeffs(generator.get_coefficients())
 
     estimator.fit(X, idx_trajs=idx)
+    print(estimator.get_coefficients())
     to_plot_logL[k] = estimator.logL[0]
 
 for k, ntrajs in enumerate(nb_trajs):
