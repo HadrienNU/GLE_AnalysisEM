@@ -77,6 +77,7 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
     muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
     muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+
     xx[dim_x:, dim_x:] = Sigh_tt + muh_tt
     xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
 
@@ -93,15 +94,11 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
     dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
 
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:]})
-
-
-def hidden_entropy(Sigh, dim_h):
-    """
-    Compute the entropy of the distribution of the hidden states
-    """
     det = np.linalg.det(Sigh[:-1, :, :])
-    return 0.5 * 2 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(det[det > 1e-12]).mean()
+
+    hS = 0.5 * 2 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(det[det > 1e-12]).mean()
+
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": hS})
 
 
 def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
@@ -314,7 +311,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.dim_coeffs_force <= 0:
             raise ValueError(f"X has {n_features} features, but {self.__class__.__name__} " f"is expecting at least {expected_features+1} features as input. Did you forget to add basis features?")
 
-    def _initialize_parameters(self, suff_stats_visibles, random_state):
+    def _initialize_parameters(self, random_state):
         """Initialize the model parameters.
 
         Parameters
@@ -324,7 +321,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             A random number generator instance that controls the random seed
             used for the method chosen to initialize the parameters.
         """
-        random_state = check_random_state(self.random_state)
+        random_state = check_random_state(random_state)
         if self.init_params == "random":
             A = generateRandomDefPosMat(self.dim_x, self.dim_h, random_state)
             if self.EnforceFDT:
@@ -399,9 +396,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         random_state = check_random_state(self.random_state)
 
         self.logL = np.empty((n_init, self.max_iter))
-        self.logL_hS = np.empty((n_init, self.max_iter))
         self.logL[:] = np.nan
-        self.logL_hS[:] = np.nan
         # best_coeffs = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
         # best_n_iter = -1
 
@@ -413,7 +408,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for init in range(n_init):
 
             if do_init:
-                self._initialize_parameters(datas_visible, random_state)
+                self._initialize_parameters(random_state)
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
@@ -421,19 +416,16 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             for n_iter in range(1, self.max_iter + 1):
                 prev_lower_bound = lower_bound
                 new_stat = 0.0
-                hidenS = 0.0
                 self._enforce_degeneracy()
                 for traj in traj_list:
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
                     new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
-                    hidenS += hidden_entropy(Sigh, self.dim_h) / len(traj_list)
 
-                lower_bound, lower_bound_norm = self.loglikelihood(new_stat) + hidenS
+                lower_bound, lower_bound_norm = self.loglikelihood(new_stat)
 
                 self._m_step(new_stat)
 
                 self.logL[init, n_iter - 1] = lower_bound
-                self.logL_hS[init, n_iter - 1] = hidenS
                 change = lower_bound - prev_lower_bound
                 self._print_verbose_msg_iter_end(n_iter, change, lower_bound)
 
@@ -556,12 +548,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
-        # hidenS = 0.0
         for traj in traj_list:
             datas = sufficient_stats(traj, self.dim_x)
             muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
             new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
-            # hidenS += hidden_entropy(traj, global_param)
         lower_bound, _ = self.loglikelihood(new_stat)
         return lower_bound  # +hidenS
 
@@ -623,7 +613,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.dim_coeffs_force = basis.degree
         self._check_initial_parameters()
         if not (self.warm_start and hasattr(self, "converged_")):
-            self._initialize_parameters(None, random_state)
+            self._initialize_parameters(random_state)
         if not hasattr(self, "fitted_"):  # Setup the basis if needed
             dummytraj = np.zeros((3, 1 + 2 * self.dim_x))
             basis.fit(dummytraj)
