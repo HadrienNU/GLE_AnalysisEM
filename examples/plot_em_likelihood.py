@@ -62,34 +62,34 @@ for n, traj in enumerate(traj_list):
     print("True")
     datas_true = sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force)
 
-    to_plot_logL_true_true[n, 0], _ = true_est.loglikelihood(datas_true)  # The true likelihood of the true datas
+    to_plot_logL_true_true[n, 0] = true_est.loglikelihood(datas_true)  # The true likelihood of the true datas
 
     est._initialize_parameters(random_state=random_state)
-    to_plot_logL_true_datas[n, 0], _ = est.loglikelihood(datas_true)  # The initial likelihood on the true datas
+    to_plot_logL_true_datas[n, 0] = est.loglikelihood(datas_true)  # The initial likelihood on the true datas
 
     # A first EM step
     print("E")
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
     new_stat = sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force)
     # hidenS = est.hidden_entropy(Sigh, est.dim_h)
-    to_plot_logL[n, 0], _ = est.loglikelihood(new_stat) + new_stat["hS"]  # The initial likelihood
-    to_plot_logL_true_param[n, 0], _ = true_est.loglikelihood(new_stat) + new_stat["hS"]  # The initial datas of the true param
+    to_plot_logL[n, 0] = est.loglikelihood(new_stat) + new_stat["hS"]  # The initial likelihood
+    to_plot_logL_true_param[n, 0] = true_est.loglikelihood(new_stat) + new_stat["hS"]  # The initial datas of the true param
     print("M")
     est._m_step(new_stat)
-    to_plot_logL[n, 1], _ = est.loglikelihood(new_stat) + new_stat["hS"]  # After M step
-    to_plot_logL_true_datas[n, 1], _ = est.loglikelihood(datas_true)  # After M step on the true datas
-    # logL2, _ = est.loglikelihood(datas)
+    to_plot_logL[n, 1] = est.loglikelihood(new_stat) + new_stat["hS"]  # After M step
+    to_plot_logL_true_datas[n, 1] = est.loglikelihood(datas_true)  # After M step on the true datas
+    # logL2 = est.loglikelihood(datas)
     # to_plot_logL[n,0] =
     # A second EM step
     print("E")
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
     new_stat = sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force)
-    to_plot_logL[n, 2], _ = est.loglikelihood(new_stat) + new_stat["hS"]  # After ME step
-    to_plot_logL_true_param[n, 1], _ = true_est.loglikelihood(new_stat) + new_stat["hS"]  # The true likelihood of the true param
+    to_plot_logL[n, 2] = est.loglikelihood(new_stat) + new_stat["hS"]  # After ME step
+    to_plot_logL_true_param[n, 1] = true_est.loglikelihood(new_stat) + new_stat["hS"]  # The true likelihood of the true param
     print("M")
     est._m_step(new_stat)
-    to_plot_logL[n, 3], _ = est.loglikelihood(new_stat)  # After MEM step
-    to_plot_logL_true_datas[n, 2], _ = est.loglikelihood(datas_true)  # The initial likelihood on the true datas
+    to_plot_logL[n, 3] = est.loglikelihood(new_stat)  # After MEM step
+    to_plot_logL_true_datas[n, 2] = est.loglikelihood(datas_true)  # The initial likelihood on the true datas
 
 
 fig, (ax1, ax2, ax3) = plt.subplots(3)

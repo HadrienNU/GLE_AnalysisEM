@@ -94,11 +94,12 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
     dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
 
-    det = np.linalg.det(Sigh[:-1, :, :])
+    detd = np.linalg.det(Sigh[:-1, :, :])
+    dets = np.linalg.det(Sigh[:-1, dim_h:, dim_h:])
+    hSdouble = 0.5 * 2 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(detd[detd > 1e-12]).mean()
+    hSsimple = 0.5 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(dets[dets > 1e-12]).mean()
 
-    hS = 0.5 * 2 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(det[det > 1e-12]).mean()
-
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": hS})
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": hSdouble - hSsimple})
 
 
 def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
@@ -421,7 +422,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
                     new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
 
-                lower_bound, lower_bound_norm = self.loglikelihood(new_stat)
+                lower_bound = self.loglikelihood(new_stat)
 
                 self._m_step(new_stat)
 
@@ -518,13 +519,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Return the current value of the negative log-likelihood
         """
         if self.model == "aboba":
-            return loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            ll = loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         elif self.model == "euler":
-            return loglikelihood_euler(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            ll = loglikelihood_euler(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         elif self.model == "euler_noiseless":
-            return loglikelihood_euler_nl(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            ll = loglikelihood_euler_nl(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
+
+        return ll + suff_datas["hS"]
 
     def score(self, X, y=None, idx_trajs=[]):
         """Compute the per-sample average log-likelihood of the given data X.

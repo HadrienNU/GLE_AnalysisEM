@@ -98,7 +98,7 @@ def loglikelihood_euler_nl(suff_datas, A, SST, coeffs_force, dim_x, dim_h, dt):
 
     logdet = dim_h * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
     quad_part = -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1[dim_x:, dim_x:]))
-    return quad_part - 0.5 * logdet, quad_part
+    return quad_part - 0.5 * logdet
 
 
 def euler_generator_nl(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, A=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
