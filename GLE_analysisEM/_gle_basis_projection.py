@@ -11,7 +11,7 @@ from sklearn.utils import check_array
 
 
 class GLE_BasisTransform(TransformerMixin, BaseEstimator):
-    """ A simple transformer that give values of the linear basis along the trajectories.
+    """ A transformer that give values of the basis along the trajectories.
 
     Parameters
     ----------
@@ -21,13 +21,13 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
     model : str, default= "aboba"
         The statistical model to use
 
-    basis_type : str, default={"name": "linear"}
+    basis_type : str, default= "linear"
         Give the wanted basis projection
         Must be one of::
-            {"name": "linear"} : Linear basis.
-            {"name": "polynomial"} : Polynomial basis.
-            {"name": "hermite"} : Hermite basis.
-            {"name": "BSplines", "":} : Hermite basis.
+            "linear" : Linear basis.
+            "polynomial" : Polynomial basis.
+            "hermite" : Hermite basis.
+            "BSplines" : BSplines basis.
 
     degree : int, default=1
         The number of basis element to consider
@@ -61,7 +61,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         """Check the inputed parameter for the basis type
         """
         if self.basis_type not in ["linear", "polynomial", "hermite", "BSplines"]:
-            raise ValueError("The basis type {} is not one of implemented one.".format(self.basis_type))
+            raise ValueError("The basis type {} is not implemented.".format(self.basis_type))
 
         if self.degree < 0:
             raise ValueError("The number of basis element must be positive")
@@ -72,7 +72,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             self.include_zeroth_term_ = False
         self.model = self.model.casefold()
 
-    def fit(self, X, y=None, **basis_params):
+    def fit(self, X, y=None):
         """A reference implementation of a fitting function for a transformer.
 
         Parameters
@@ -93,7 +93,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         """
         # Input validation
         X = check_array(X, ensure_min_samples=2)
-        self._check_basis_type(**basis_params)  # Check that input parameters are coherent
+        self._check_basis_type()  # Check that input parameters are coherent
 
         self.dim_x = (X.shape[1] - 1) // 2
         combinations = self._combinations(self.dim_x, self.degree, self.interaction_only, self.include_zeroth_term_)
@@ -187,7 +187,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         return np.hstack((X, bk))
 
     def predict(self, X):
-        """Predict the hidden variables for the data samples in X using trained model.
+        """Predict the values of the force basis for the data samples in X using trained model.
 
         Parameters
         ----------
