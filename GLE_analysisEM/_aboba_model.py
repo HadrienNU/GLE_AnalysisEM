@@ -80,7 +80,7 @@ def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
     return traj[:, :dim_x], mutilde, expA[:, dim_x:]
 
 
-def m_step_aboba(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusion):
+def m_step_aboba(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
     """M step.
     TODO:   -Select dimension of fitted parameters from the sufficient stats
     """

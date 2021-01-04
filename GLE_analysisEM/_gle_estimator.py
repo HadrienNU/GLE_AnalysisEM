@@ -135,6 +135,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     max_iter: int, default=50
         The maximum number of EM iterations
 
+    OptimizeForce: bool, default=True
+        Optimize or not the force coefficients, to be set to False if the force or the potential have been externally determined
 
     OptimizeDiffusion: bool, default=True
         Optimize or not the diffusion coefficients
@@ -189,11 +191,32 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     """
 
     def __init__(
-        self, dim_x=1, dim_h=1, tol=5e-4, max_iter=50, OptimizeDiffusion=True, EnforceFDT=False, init_params="random", model="aboba", A_init=None, C_init=None, force_init=None, mu_init=None, sig_init=None, n_init=1, random_state=None, warm_start=False, no_stop=False, verbose=0, verbose_interval=10
+        self,
+        dim_x=1,
+        dim_h=1,
+        tol=5e-4,
+        max_iter=50,
+        OptimizeForce=True,
+        OptimizeDiffusion=True,
+        EnforceFDT=False,
+        init_params="random",
+        model="aboba",
+        A_init=None,
+        C_init=None,
+        force_init=None,
+        mu_init=None,
+        sig_init=None,
+        n_init=1,
+        random_state=None,
+        warm_start=False,
+        no_stop=False,
+        verbose=0,
+        verbose_interval=10,
     ):
         self.dim_x = dim_x
         self.dim_h = dim_h
 
+        self.OptimizeForce = OptimizeForce
         self.OptimizeDiffusion = OptimizeDiffusion
         self.EnforceFDT = EnforceFDT
 
@@ -256,6 +279,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.EnforceFDT and not self.OptimizeDiffusion:
             self.OptimizeDiffusion = True
             warnings.warn("As enforcement of FDT was asked, the diffusion coefficients will be optimized too.")
+        # if not self.OptimizeForce and self.force_init is None:
+        #     raise ValueError("No initial values for the force is provided and OptimizeForce is set to False")
+
         if self.init_params == "user":
             if self.n_init != 1:
                 self.n_init = 1
@@ -481,11 +507,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 -Allow to select statistical model (Euler/ ABOBA)
         """
         if self.model == "aboba":
-            friction, force, diffusion = m_step_aboba(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion)
+            friction, force, diffusion = m_step_aboba(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         elif self.model == "euler":
-            friction, force, diffusion = m_step_euler(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion)
+            friction, force, diffusion = m_step_euler(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         elif self.model == "euler_noiseless":
-            friction, force, diffusion = m_step_euler_nl(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion)
+            friction, force, diffusion = m_step_euler_nl(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
 

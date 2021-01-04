@@ -41,7 +41,7 @@ def compute_expectation_estep_euler(traj, A, force_coeffs, dim_x, dim_h, dt):
     return traj[:, :dim_x], mutilde, np.identity(dim_x + dim_h)[:, dim_x:] - A[:, dim_x:]
 
 
-def m_step_euler(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusion):
+def m_step_euler(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
     """M step.
     TODO:   -Select dimension of fitted parameters from the sufficient stats
     """
