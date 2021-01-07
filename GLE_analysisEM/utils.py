@@ -41,7 +41,7 @@ def loadTestDatas_est(paths, dim_x, dim_h):
 
 
 def loadDatas_est(paths, dim_x):
-    """Loads some test trajectories with known hidden variables
+    """Loads some test trajectories
 
     Parameters
     ----------
@@ -64,6 +64,16 @@ def loadDatas_est(paths, dim_x):
             X = np.vstack((X, txv))
 
     return X, idx_trajs
+
+
+def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
+    """Generate a random value of the A matrix
+    """
+    A = 4 * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h))
+    # A[dim_x:, :dim_x] = 1
+    if not np.all(np.linalg.eigvals(A + A.T) > 0):
+        A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)
+    return A
 
 
 def filter_kalman(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h):
@@ -200,21 +210,91 @@ def memory_timescales(coeffs, dim_x):
     return np.linalg.eigvals(coeffs["A"][dim_x:, dim_x:])
 
 
-def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
-    """Generate a random value of the A matrix
+def correlation(a, b=None, subtract_mean=False):
     """
-    A = 4 * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h))
-    # A[dim_x:, :dim_x] = 1
-    if not np.all(np.linalg.eigvals(A + A.T) > 0):
-        A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)
-    return A
+    Correlation between a and b
+    """
+    meana = int(subtract_mean) * np.mean(a)
+    a2 = np.append(a - meana, np.zeros(2 ** int(np.ceil((np.log(len(a)) / np.log(2)))) - len(a)))
+    data_a = np.append(a2, np.zeros(len(a2)))
+    fra = np.fft.fft(data_a)
+    if b is None:
+        sf = np.conj(fra) * fra
+    else:
+        meanb = int(subtract_mean) * np.mean(b)
+        b2 = np.append(b - meanb, np.zeros(2 ** int(np.ceil((np.log(len(b)) / np.log(2)))) - len(b)))
+        data_b = np.append(b2, np.zeros(len(b2)))
+        frb = np.fft.fft(data_b)
+        sf = np.conj(fra) * frb
+    res = np.fft.ifft(sf)
+    cor = np.real(res[: len(a)]) / np.array(range(len(a), 0, -1))
+    return cor
 
 
-def xcorr(x):
-    """FFT based autocorrelation function, which is faster than numpy.correlate"""
-    from numpy.fft import fft, ifft
+def forcefield(x_lims, basis, force_coeffs):
+    """Compute and save the force field that have been fitted
 
-    # x is supposed to be an array of sequences, of shape (totalelements, length)
-    fftx = fft(x, axis=0)
-    ret = ifft(fftx * np.conjugate(fftx), axis=0)
-    return ret
+    Parameters
+    ----------
+
+    x_lims: array, shape (dim_x,3)
+        Bounds of the plot
+
+    basis: GLE_BasisTransform instance
+        The instance of the basis projection
+
+    force_coeffs: array-like
+        Value of the force coefficients in the basis
+
+    """
+    x_lims = np.asarray(x_lims)
+    if x_lims.ndim == 1:  # In case of flat array
+        x_lims.reshape(1, -1)
+    print(x_lims)
+    if x_lims.shape[0] == 1:  # 1D:
+        X = np.linspace(x_lims[0][0], x_lims[0][1], x_lims[0][2]).reshape(-1, 1)
+    elif x_lims.shape[0] == 2:  # 2D:
+        x_coords = np.linspace(x_lims[0][0], x_lims[0][1], x_lims[0][2])
+        y_coords = np.linspace(x_lims[1][0], x_lims[1][1], x_lims[1][2])
+        x, y = np.meshgrid(x_coords, y_coords)
+        X = np.vstack((x.flatten(), y.flatten())).T
+    elif x_lims.shape[0] == 3:  # 3D:
+        x_coords = np.linspace(x_lims[0][0], x_lims[0][1], x_lims[0][2])
+        y_coords = np.linspace(x_lims[1][0], x_lims[1][1], x_lims[1][2])
+        z_coords = np.linspace(x_lims[2][0], x_lims[2][1], x_lims[2][2])
+        x, y, z = np.meshgrid(x_coords, y_coords, z_coords)
+        X = np.vstack((x.flatten(), y.flatten(), z.flatten())).T
+    elif x_lims.shape[0] > 3:
+        raise NotImplementedError("Dimension higher than 3 are not implemented")
+    force_field = np.matmul(force_coeffs, basis.predict(X).T).T
+    return np.hstack((X, force_field))
+
+
+def forcefield_plot2D(x_lims, basis, force_coeffs):
+    """Compute and save the force field that have been fitted
+
+    Parameters
+    ----------
+
+    x_lims: array, shape (dim_x,3)
+        Bounds of the plot
+
+    basis: GLE_BasisTransform instance
+        The instance of the basis projection
+
+    force_coeffs: array-like
+        Value of the force coefficients in the basis
+
+    """
+    x_coords = np.linspace(x_lims[0][0], x_lims[0][1], x_lims[0][2])
+    y_coords = np.linspace(x_lims[1][0], x_lims[1][1], x_lims[1][2])
+    x, y = np.meshgrid(x_coords, y_coords)
+    X = np.vstack((x.flatten(), y.flatten())).T
+    force_field = np.matmul(force_coeffs, basis.predict(X).T).T
+    f = force_field.reshape(x_lims[0][2], x_lims[1][2], 2)
+    return x, y, f[:, :, 0], f[:, :, 1]
+
+
+def potential_reconstruction():
+    """ From the force field reconstruct the potential
+    """
