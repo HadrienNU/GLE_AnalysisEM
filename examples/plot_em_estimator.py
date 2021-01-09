@@ -43,7 +43,7 @@ for k, ntrajs in enumerate(nb_trajs):
     X = basis.fit_transform(X)
 
     # Trajectory estimation
-    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1)
+    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, max_iter=max_iter, n_init=10, random_state=None, verbose=1)
     # We set some initial conditions
     # estimator.set_init_coeffs(generator.get_coefficients())
 

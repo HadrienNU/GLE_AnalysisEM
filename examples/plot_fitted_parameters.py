@@ -9,26 +9,27 @@ Plot obtained values of the parameters versus the actual ones
 import numpy as np
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
-from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D
+from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation
 
 dim_x = 2
 dim_h = 2
-random_state = 23
+random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
-max_iter = 1
+force = [[-0.25, -1], [1, -0.25]]
 
 # ------ Generation ------#
 basis = GLE_BasisTransform(basis_type="linear")
 
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=50000, n_trajs=5, x0=0.0, v0=0.0, basis=basis)
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=50, x0=0.0, v0=0.0, basis=basis)
 print(generator.get_coefficients())
 X = basis.fit_transform(X)
 
 # ------ Estimation ------#
-estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, n_init=max_iter, EnforceFDT=False, random_state=random_state + 1)
+estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, n_init=100, EnforceFDT=False, random_state=None)
 estimator.fit(X)
+# print(estimator.get_coefficients())
 
 # ------ Plotting ------#
 fig, axs = plt.subplots(2, 2)
@@ -63,11 +64,15 @@ axs[0, 1].plot(time, kernel[:, 0, 0], label="Fitted memory kernel")
 axs[0, 1].plot(time_true, kernel_true[:, 0, 0], label="True memory kernel")
 axs[0, 1].legend(loc="upper right")
 # ------ Diffusion ------#
+traj_list = np.split(X, idx)
+vacf_num = 0.0
+for n, trj in enumerate(traj_list):
+    vacf_num += correlation(trj[:, 2])
+    time = trj[:, 0]
+vacf_num /= len(traj_list)
 
 axs[1, 0].set_title("Velocity autocorrelation function")
-# plt.plot(to_plot_logL_true_datas[:, 0], label="Initial likelihood")
-# ax3.plot(to_plot_logL_true_datas[:, 1] - to_plot_logL_true_datas[:, 0], label="After M step")
-# ax3.plot(to_plot_logL_true_datas[:, 2] - to_plot_logL_true_datas[:, 1], label="After MM step")
+axs[1, 0].plot(time, vacf_num, label="Numerical VACF")
 axs[1, 0].legend(loc="upper right")
 
 plt.show()

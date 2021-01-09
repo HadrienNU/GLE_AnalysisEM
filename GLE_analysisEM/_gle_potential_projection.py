@@ -84,7 +84,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         self._check_parameters()  # Check that input parameters are coherent
         dt = X[1, 0] - X[0, 0]
         self.dim_x = (X.shape[1] - 1) // 2
-        print("DIM x", self.dim_x)
+        # print("DIM x", self.dim_x)
         self.n_output_features_ = self.dim_x
         if self.model in ["aboba"]:
             x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
@@ -109,7 +109,6 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
                 x_coords = x.flatten()[np.nonzero(fe_flat)]
                 y_coords = y.flatten()[np.nonzero(fe_flat)]
                 self.fe_spline_ = interpolate.bisplrep(x_coords, y_coords, fe_flat[np.nonzero(fe_flat)])
-                # print(self.fe_spline_)
         elif self.estimator == "kde":
             self.kde_ = KernelDensity(kernel=self.kernel, bandwidth=self.bandwidth).fit(x_pos)
         self.fitted_ = True
@@ -142,7 +141,6 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             elif self.model in ["euler", "euler_noiseless"]:
                 x_pos = X[:, 1 : 1 + self.dim_x]
             n_samples, n_features = x_pos.shape
-
             if n_features != self.dim_x:
                 raise ValueError("X shape does not match training shape")
 
@@ -156,7 +154,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             else:
                 raise NotImplementedError
         elif self.estimator == "kde":
-            raise NotImplementedError
+            bk = self.differentiateKernel(x_pos)
         return np.hstack((X, bk))
 
     def predict(self, X):
@@ -195,6 +193,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             elif self.dim_x == 2:
                 return -interpolate.bisplev(x_pos[:, 0], x_pos[:, 1], self.fe_spline_)
             else:
+                # interpolate.interpn(points, self.fe_, x_pos, method="linear")
                 raise NotImplementedError
                 self.digitize(x_pos)
         elif self.estimator == "kde":
@@ -203,7 +202,17 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
     def digitize(self, X):
         """ Find location of a given points inside the bins of the histogram
         """
-        out_indx = np.empty((X.shape[0], self.dim_x))
+        out_indx = np.empty((X.shape[0]))
         for i in range(self.dim_x):
             out_indx[i] = np.digitize(X[:, i], self.edges_hist_[i])
         return out_indx
+
+    def differentiateKernel(self, X):
+        """Numerical differentiation in N-D
+        """
+        grad = np.empty_like(X)
+        for n in range(self.dim_x):
+            eps = np.zeros_like(X)
+            eps[:, n] = 0.5 * self.bandwidth
+            grad[:, n] = (self.kde_.score_samples(X + eps) - self.kde_.score_samples(X - eps)) / (self.bandwidth)
+        return grad

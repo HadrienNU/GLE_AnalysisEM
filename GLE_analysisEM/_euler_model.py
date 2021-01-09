@@ -101,10 +101,14 @@ def loglikelihood_euler(suff_datas, A, SST, coeffs_force, dim_x, dim_h, dt):
     return quad_part - 0.5 * logdet
 
 
-def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, A=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
+def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=None, v0=None, A=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
     """
     Integrate the equation of nsteps steps
     """
+    if x0 is None:
+        x0 = np.zeros((dim_x,))
+    if v0 is None:
+        v0 = np.zeros((dim_x,))
     x_traj = np.empty((nsteps, dim_x))
     p_traj = np.empty((nsteps, dim_x))
     h_traj = np.empty((nsteps, dim_h))

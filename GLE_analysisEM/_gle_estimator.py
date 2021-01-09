@@ -424,8 +424,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         self.logL = np.empty((n_init, self.max_iter))
         self.logL[:] = np.nan
-        # best_coeffs = {"A": np.identity(self.dim_x + self.dim_h), "C": np.identity(self.dim_x + self.dim_h), "µ_0": np.zeros((self.dim_h,)), "Σ_0": np.identity(self.dim_h)}
-        # best_n_iter = -1
 
         # Initial evalution of the sufficient statistics for observables
         datas_visible = 0.0
@@ -460,19 +458,21 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     max_lower_bound = lower_bound
                     best_coeffs = self.get_coefficients()
                     best_n_iter = n_iter
+                    best_n_init = init
 
                 if abs(change) < self.tol or self.dim_h == 0:  # We require at least 2 iterations
                     self.converged_ = True
                     if not self.no_stop:
                         break
 
-            self._print_verbose_msg_init_end(lower_bound, best_n_iter)
+            self._print_verbose_msg_init_end(lower_bound, n_iter)
 
             if not self.converged_:
                 warnings.warn("Initialization %d did not converge. " "Try different init parameters, " "or increase max_iter, tol " "or check for degenerate data." % (init + 1), ConvergenceWarning)
 
         self.set_coefficients(best_coeffs)
         self.n_iter_ = best_n_iter
+        self.n_best_init_ = best_n_init
         self.lower_bound_ = max_lower_bound
 
         return self
@@ -641,9 +641,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.dt = dt
         self.dim_coeffs_force = basis.degree
         self._check_initial_parameters()
-        if not (self.warm_start and hasattr(self, "converged_")):
+        if not (self.warm_start or hasattr(self, "converged_")):
             self._initialize_parameters(random_state)
-        if not hasattr(self, "fitted_"):  # Setup the basis if needed
+        if not hasattr(basis, "fitted_"):  # Setup the basis if needed
             dummytraj = np.zeros((3, 1 + 2 * self.dim_x))
             basis.fit(dummytraj)
 
@@ -794,7 +794,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _print_verbose_msg_init_end(self, ll, best_iter):
         """Print verbose message on the end of iteration."""
         if self.verbose == 1:
-            print("Initialization converged: %s at step %i" % (self.converged_, best_iter))
+            print("Initialization converged: %s at step %i \t ll %.5f" % (self.converged_, best_iter, ll))
         elif self.verbose >= 2:
             print("Initialization converged: %s at step %i \t time lapse %.5fs\t ll %.5f" % (self.converged_, best_iter, time() - self._init_prev_time, ll))
             print("----------------Current parameters values------------------")

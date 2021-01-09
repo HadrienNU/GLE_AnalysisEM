@@ -20,7 +20,7 @@ pd.set_option("display.max_colwidth", -1)
 dim_x = 1
 dim_h = 1
 model = "aboba"
-random_state = 42
+random_state = None
 force = -np.identity(dim_x)
 
 basis = GLE_BasisTransform(basis_type="linear")

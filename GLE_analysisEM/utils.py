@@ -250,7 +250,6 @@ def forcefield(x_lims, basis, force_coeffs):
     x_lims = np.asarray(x_lims)
     if x_lims.ndim == 1:  # In case of flat array
         x_lims.reshape(1, -1)
-    print(x_lims)
     if x_lims.shape[0] == 1:  # 1D:
         X = np.linspace(x_lims[0][0], x_lims[0][1], x_lims[0][2]).reshape(-1, 1)
     elif x_lims.shape[0] == 2:  # 2D:
