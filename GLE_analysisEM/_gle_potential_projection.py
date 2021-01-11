@@ -39,8 +39,9 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         The kernel of the KDE
     """
 
-    def __init__(self, model="aboba", estimator="histogram", bins="auto", kernel="gaussian", bandwidth=1.0, per=False):
+    def __init__(self, dim_x=1, model="aboba", estimator="histogram", bins="auto", kernel="gaussian", bandwidth=1.0, per=False):
 
+        self.dim_x = dim_x
         self.model = model
         self.estimator = estimator
 
@@ -83,7 +84,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         X = check_array(X, ensure_min_samples=2)
         self._check_parameters()  # Check that input parameters are coherent
         dt = X[1, 0] - X[0, 0]
-        self.dim_x = (X.shape[1] - 1) // 2
+        # self.dim_x = (X.shape[1] - 1) // 2
         # print("DIM x", self.dim_x)
         self.n_output_features_ = self.dim_x
         if self.model in ["aboba"]:

@@ -27,7 +27,7 @@ X, idx, Xh = generator.sample(n_samples=50000, n_trajs=2, x0=0.0, v0=0.0, basis=
 
 # ------ Potential estimation ------#
 
-potential = GLE_PotentialTransform(estimator="histogram")
+potential = GLE_PotentialTransform(estimator="histogram", dim_x=dim_x)
 potential.fit(X)
 
 y = potential.transform(X)  # Force values

@@ -105,6 +105,10 @@ def euler_generator_nl(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, A=N
     """
     Integrate the equation of nsteps steps
     """
+    if x0 is None:
+        x0 = np.zeros((dim_x,))
+    if v0 is None:
+        v0 = np.zeros((dim_x,))
     x_traj = np.empty((nsteps, dim_x))
     p_traj = np.empty((nsteps, dim_x))
     h_traj = np.empty((nsteps, dim_h))
