@@ -11,23 +11,24 @@ from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation
 
-dim_x = 2
+dim_x = 1
 dim_h = 2
 random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
-force = [[-0.25, -1], [1, -0.25]]
+# force = [[-0.25, -1], [1, -0.25]]
 
 # ------ Generation ------#
-basis = GLE_BasisTransform(basis_type="linear")
-
+pot_gen = GLE_BasisTransform(basis_type="linear")
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=50, x0=0.0, v0=0.0, basis=basis)
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=50, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
-X = basis.fit_transform(X)
+
 
 # ------ Estimation ------#
-estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, n_init=100, EnforceFDT=False, random_state=None)
+basis = GLE_BasisTransform(basis_type="bsplines")
+X = basis.fit_transform(X)
+estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=None)
 estimator.fit(X)
 # print(estimator.get_coefficients())
 

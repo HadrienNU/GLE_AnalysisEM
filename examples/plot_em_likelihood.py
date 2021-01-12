@@ -1,6 +1,6 @@
 """
 ===========================
-E step, Kalman filter
+Inner working
 ===========================
 
 Inner working of the fit method :class:`GLE_analysisEM.GLE_Estimator.fit`

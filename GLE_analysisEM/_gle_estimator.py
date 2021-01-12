@@ -639,13 +639,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         random_state = check_random_state(self.random_state)
         self.dt = dt
-        self.dim_coeffs_force = basis.degree
-        self._check_initial_parameters()
-        if not (self.warm_start or hasattr(self, "converged_")):
-            self._initialize_parameters(random_state)
         if not hasattr(basis, "fitted_"):  # Setup the basis if needed
             dummytraj = np.zeros((3, 1 + 2 * self.dim_x))
             basis.fit(dummytraj)
+        self.dim_coeffs_force = basis.nb_basis_elt_
+
+        self._check_initial_parameters()
+        if not (self.warm_start or hasattr(self, "converged_")):
+            self._initialize_parameters(random_state)
 
         if x0 is None:
             x0 = np.zeros((self.dim_x))
