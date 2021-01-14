@@ -434,6 +434,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
             if do_init:
                 self._initialize_parameters(random_state)
+                if self.init_params == "markov":
+                    self._m_step_markov(datas_visible)
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
@@ -504,7 +506,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _m_step(self, sufficient_stat):
         """M step.
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
-                -Allow to select statistical model (Euler/ ABOBA)
         """
         if self.model == "aboba":
             friction, force, diffusion = m_step_aboba(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
@@ -516,7 +517,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             raise ValueError("Model {} not implemented".format(self.model))
 
         self.friction_coeffs = friction
-        self.force_coeffs = force
+        if self.OptimizeForce:
+            self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
         self.sig0 = sufficient_stat["Σ_0"]
         if self.OptimizeDiffusion:
@@ -539,6 +541,24 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _enforce_degeneracy(self):
         """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients
         """
+
+    def _m_step_markov(self, sufficient_stat_vis):
+        """ Compute coefficients estimate via Markovian approximation to provide initialization
+        """
+        if self.model == "aboba":
+            friction, force, diffusion = m_step_aboba(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        elif self.model == "euler":
+            friction, force, diffusion = m_step_euler(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        elif self.model == "euler_noiseless":
+            friction, force, diffusion = m_step_euler_nl(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        else:
+            raise ValueError("Model {} not implemented".format(self.model))
+
+        self.friction_coeffs[: self.dim_x, : self.dim_x] = friction
+        if self.OptimizeForce:
+            self.force_coeffs = force
+        if self.OptimizeDiffusion:
+            self.diffusion_coeffs[: self.dim_x, : self.dim_x] = diffusion
 
     def loglikelihood(self, suff_datas):
         """
@@ -583,6 +603,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
         lower_bound, _ = self.loglikelihood(new_stat)
         return lower_bound  # +hidenS
+
+    def coefficients_error():
+        """ Compute asymptotic Fisher Information matrix to provide error estimate
+        """
 
     def predict(self, X, idx_trajs=[]):
         """Predict the hidden variables for the data samples in X using trained model.
