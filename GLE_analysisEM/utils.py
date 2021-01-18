@@ -72,7 +72,7 @@ def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
     A = 4 * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h))
     # A[dim_x:, :dim_x] = 1
     if not np.all(np.linalg.eigvals(A + A.T) > 0):
-        A += np.abs(0.75 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)
+        A += np.abs(0.5 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)
     return A
 
 
@@ -263,7 +263,14 @@ def forcefield(x_lims, basis, force_coeffs):
         z_coords = np.linspace(x_lims[2][0], x_lims[2][1], x_lims[2][2])
         x, y, z = np.meshgrid(x_coords, y_coords, z_coords)
         X = np.vstack((x.flatten(), y.flatten(), z.flatten())).T
-    elif x_lims.shape[0] > 3:
+    elif x_lims.shape[0] == 4:  # 4D:
+        x_coords = np.linspace(x_lims[0][0], x_lims[0][1], x_lims[0][2])
+        y_coords = np.linspace(x_lims[1][0], x_lims[1][1], x_lims[1][2])
+        z_coords = np.linspace(x_lims[2][0], x_lims[2][1], x_lims[2][2])
+        c_coords = np.linspace(x_lims[3][0], x_lims[3][1], x_lims[3][2])
+        x, y, z, c = np.meshgrid(x_coords, y_coords, z_coords, c_coords)
+        X = np.vstack((x.flatten(), y.flatten(), z.flatten(), c.flatten())).T
+    elif x_lims.shape[0] > 4:
         raise NotImplementedError("Dimension higher than 3 are not implemented")
     force_field = np.matmul(force_coeffs, basis.predict(X).T).T
     return np.hstack((X, force_field))

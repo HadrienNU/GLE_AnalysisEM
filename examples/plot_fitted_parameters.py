@@ -29,7 +29,7 @@ print(generator.get_coefficients())
 basis = GLE_BasisTransform(basis_type="bsplines")
 X = basis.fit_transform(X)
 estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=None)
-estimator.fit(X)
+estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
 # ------ Plotting ------#

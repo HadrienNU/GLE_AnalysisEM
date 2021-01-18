@@ -336,7 +336,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
         self.dim_coeffs_force = n_features - expected_features
         if self.dim_coeffs_force <= 0:
-            raise ValueError(f"X has {n_features} features, but {self.__class__.__name__} " f"is expecting at least {expected_features+1} features as input. Did you forget to add basis features?")
+            raise ValueError(f"X has {n_features} features, but {self.__class__.__name__} is expecting at least {expected_features+1} features as input. Did you forget to add basis features?")
 
     def _initialize_parameters(self, random_state):
         """Initialize the model parameters.
@@ -373,11 +373,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
             self.force_coeffs = -np.ones((self.dim_x, self.dim_coeffs_force))
+
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
             self.mu0 = np.asarray(self.mu_init)
         else:
             self.mu0 = np.zeros((self.dim_h))
+
         if self.sig_init is not None:
             self.sig0 = np.asarray(self.sig_init)
         else:
