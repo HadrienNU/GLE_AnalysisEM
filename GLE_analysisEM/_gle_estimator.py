@@ -336,7 +336,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
         self.dim_coeffs_force = n_features - expected_features
         if self.dim_coeffs_force <= 0:
-            raise ValueError(f"X has {n_features} features, but {self.__class__.__name__} is expecting at least {expected_features+1} features as input. Did you forget to add basis features?")
+            raise ValueError("X has {} features, but {} is expecting at least {} features as input. Did you forget to add basis features?".format(n_features, self.__class__.__name__, expected_features + 1))
 
     def _initialize_parameters(self, random_state):
         """Initialize the model parameters.
