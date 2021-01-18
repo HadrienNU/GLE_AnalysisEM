@@ -384,6 +384,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.sig0 = np.asarray(self.sig_init)
         else:
             self.sig0 = np.identity(self.dim_h)
+        self.initialized_ = True
 
     def fit(self, X, y=None, idx_trajs=[]):
         """Estimate model parameters with the EM algorithm.
@@ -577,7 +578,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         return ll + suff_datas["hS"]
 
-    def score(self, X, y=None, idx_trajs=[]):
+    def score(self, X, y=None, idx_trajs=[], Xh=None):
         """Compute the per-sample average log-likelihood of the given data X.
 
         Parameters
@@ -591,7 +592,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         log_likelihood : float
             Log likelihood of the Gaussian mixture given X.
         """
-        check_is_fitted(self, "converged_")
+        check_is_fitted(self, "initialized_")
         X = check_array(X, ensure_min_samples=4, allow_nd=True)
         self._check_n_features(X)
 
@@ -599,12 +600,20 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
-        for traj in traj_list:
-            datas = sufficient_stats(traj, self.dim_x)
-            muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-            new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
-        lower_bound, _ = self.loglikelihood(new_stat)
-        return lower_bound  # +hidenS
+        if Xh is None:
+            for traj in traj_list:
+                datas = sufficient_stats(traj, self.dim_x)
+                muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
+                new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+        else:
+            traj_list_h = np.split(Xh, idx_trajs)
+            for n, traj in enumerate(traj_list):
+                datas_visible = sufficient_stats(traj, self.dim_x)
+                zero_sig = np.zeros((len(traj), 2 * self.dim_h, 2 * self.dim_h))
+                muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
+                new_stat += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+        lower_bound = self.loglikelihood(new_stat)
+        return lower_bound
 
     def coefficients_error():
         """ Compute asymptotic Fisher Information matrix to provide error estimate

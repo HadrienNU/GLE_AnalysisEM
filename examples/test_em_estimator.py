@@ -29,7 +29,7 @@ model = "aboba"
 force = -np.identity(dim_x)
 max_iter = 100
 
-ntrajs = 25
+ntrajs = 100
 
 basis = GLE_BasisTransform(basis_type="linear", model=model)
 
@@ -37,11 +37,15 @@ basis = GLE_BasisTransform(basis_type="linear", model=model)
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="user", model=model, random_state=random_state, A_init=[[5, 1.0], [-2.0, 0.07]])
 X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
 print("Real parameters", generator.get_coefficients())
+
 X = basis.fit_transform(X)
+print("Initial ll", generator.score(X, idx_trajs=idx))
+
+
 # Trajectory estimation
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=2, verbose_interval=1)
-# We set some initial conditions
-# estimator.set_init_coeffs(generator.get_coefficients())
+estimator = GLE_Estimator(init_params="user", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=2, verbose_interval=10)
+# We set some initial conditions, check for stability
+estimator.set_init_coeffs(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)
 print(estimator.get_coefficients())
 
