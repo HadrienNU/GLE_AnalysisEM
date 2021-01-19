@@ -23,6 +23,7 @@ from ._gle_basis_projection import GLE_BasisTransform
 try:
     from ._filter_smoother import filtersmoother
 except ImportError:
+    warnings.warn("Python fallback will been used for filtersmoother module.")
     from .utils import filtersmoother
 
 
@@ -42,7 +43,7 @@ def sufficient_stats(traj, dim_x):
     bkdx = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
     bkbk = np.mean(bk[:, :, np.newaxis] * bk[:, np.newaxis, :], axis=0)
 
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk})
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0})
 
 
 def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="aboba"):
@@ -366,6 +367,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
+
         if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
             _, self.diffusion_coeffs = self._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init))
 
@@ -433,12 +435,23 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for traj in traj_list:
             datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
 
+        if self.dim_h == 0:  # Markovian case
+            if do_init:
+                self._initialize_parameters(random_state)
+            self._m_step_markov(datas_visible)
+            n_init = 0  # To avoid running the loop
+            self.converged_ = True
+            best_coeffs = self.get_coefficients()
+            best_n_iter = 0
+            best_n_init = 0
+            max_lower_bound = self.loglikelihood(datas_visible, dim_h=0)
+
         for init in range(n_init):
 
             if do_init:
                 self._initialize_parameters(random_state)
-                if self.init_params == "markov":
-                    self._m_step_markov(datas_visible)
+                # if self.init_params == "markov":
+                self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
@@ -465,7 +478,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     best_n_iter = n_iter
                     best_n_init = init
 
-                if abs(change) < self.tol or self.dim_h == 0:  # We require at least 2 iterations
+                if abs(change) < self.tol:  # We require at least 2 iterations
                     self.converged_ = True
                     if not self.no_stop:
                         break
@@ -563,19 +576,20 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.OptimizeDiffusion:
             self.diffusion_coeffs[: self.dim_x, : self.dim_x] = diffusion
 
-    def loglikelihood(self, suff_datas):
+    def loglikelihood(self, suff_datas, dim_h=None):
         """
         Return the current value of the negative log-likelihood
         """
+        if dim_h is None:
+            dim_h = self.dim_h
         if self.model == "aboba":
-            ll = loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            ll = loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
         elif self.model == "euler":
-            ll = loglikelihood_euler(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            ll = loglikelihood_euler(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
         elif self.model == "euler_noiseless":
-            ll = loglikelihood_euler_nl(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            ll = loglikelihood_euler_nl(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
-
         return ll + suff_datas["hS"]
 
     def score(self, X, y=None, idx_trajs=[], Xh=None):
@@ -615,7 +629,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         lower_bound = self.loglikelihood(new_stat)
         return lower_bound
 
-    def coefficients_error():
+    def fisher_error():
         """ Compute asymptotic Fisher Information matrix to provide error estimate
         """
 

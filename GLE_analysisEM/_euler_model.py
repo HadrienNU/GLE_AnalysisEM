@@ -45,13 +45,19 @@ def m_step_euler(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusio
     """M step.
     TODO:   -Select dimension of fitted parameters from the sufficient stats
     """
+    if OptimizeForce:
+        invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
+        YX = sufficient_stat["xdx"].T - np.matmul(sufficient_stat["bkdx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
+        XX = sufficient_stat["xx"] - np.matmul(sufficient_stat["bkx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
+        A = -np.matmul(YX, np.linalg.inv(XX))
 
-    invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
-    YX = sufficient_stat["xdx"].T - np.matmul(sufficient_stat["bkdx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
-    XX = sufficient_stat["xx"] - np.matmul(sufficient_stat["bkx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
-    A = -np.matmul(YX, np.linalg.inv(XX))
-
-    force_coeffs = (np.matmul(sufficient_stat["bkdx"].T, invbkbk) / dt - np.matmul(A, np.matmul(sufficient_stat["bkx"].T, invbkbk)) / dt)[:dim_x, :]
+        force_coeffs = (np.matmul(sufficient_stat["bkdx"].T, invbkbk) / dt - np.matmul(A, np.matmul(sufficient_stat["bkx"].T, invbkbk)) / dt)[:dim_x, :]
+    else:
+        Pf = np.zeros((dim_x + dim_h, dim_x))
+        Pf[:dim_x, :dim_x] = dt * np.identity(dim_x)
+        YX = sufficient_stat["xdx"].T - np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
+        XX = sufficient_stat["xx"]
+        A = -np.matmul(YX, np.linalg.inv(XX))
 
     if OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
         Pf = np.zeros((dim_x + dim_h, dim_x))
