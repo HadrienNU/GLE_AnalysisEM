@@ -3,6 +3,7 @@ Somes utilities function
 """
 import numpy as np
 import scipy.linalg
+from sklearn.model_selection import ShuffleSplit
 
 
 def loadTestDatas_est(paths, dim_x, dim_h):
@@ -64,6 +65,17 @@ def loadDatas_est(paths, dim_x):
             X = np.vstack((X, txv))
 
     return X, idx_trajs
+
+
+def split_loadDatas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, random_state=None):
+    """
+    Give a generator that give only a subset of the paths for cross validation
+    See sklearn.model_selection.ShuffleSplit for documentation
+    """
+    nppaths = np.asarray(paths)
+    ss = ShuffleSplit(n_splits=n_splits, test_size=test_size, train_size=train_size, random_state=random_state)
+    for train_index, test_index in ss.split(paths):
+        yield loadDatas_est(nppaths[train_index], dim_x)
 
 
 def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
