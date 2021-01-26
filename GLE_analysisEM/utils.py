@@ -4,6 +4,7 @@ Somes utilities function
 import numpy as np
 import scipy.linalg
 from sklearn.model_selection import ShuffleSplit
+from sklearn.utils import resample
 
 
 def loadTestDatas_est(paths, dim_x, dim_h):
@@ -71,6 +72,17 @@ def split_loadDatas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, ra
     """
     Give a generator that give only a subset of the paths for cross validation
     See sklearn.model_selection.ShuffleSplit for documentation
+    """
+    nppaths = np.asarray(paths)
+    ss = ShuffleSplit(n_splits=n_splits, test_size=test_size, train_size=train_size, random_state=random_state)
+    for train_index, test_index in ss.split(paths):
+        yield loadDatas_est(nppaths[train_index], dim_x)
+
+
+def bootstrap_Datas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, random_state=None):
+    """
+    Give a generator that give only a subset of the paths with replacement for bootstrapping
+    See sklearn.utils.resample for documentation
     """
     nppaths = np.asarray(paths)
     ss = ShuffleSplit(n_splits=n_splits, test_size=test_size, train_size=train_size, random_state=random_state)
@@ -222,6 +234,25 @@ def memory_timescales(coeffs, dim_x):
     return np.linalg.eigvals(coeffs["A"][dim_x:, dim_x:])
 
 
+def fit_memory_fct_helper(dt, ntimes, noDirac):
+    """
+    The function to fit
+    """
+    dim_x = Avh.shape[0]
+    Kernel = np.zeros((ntimes, dim_x, dim_x))
+    for n in range(ntimes):
+        Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * n * dt * Ahh), Ahv))
+    if not noDirac:
+        Kernel[0, :, :] += 2 * Avv
+    return Kernel
+
+
+def fit_memory_function():
+    """
+    Provide a fit of the memory function to sum of exponential
+    """
+
+
 def correlation(a, b=None, subtract_mean=False):
     """
     Correlation between a and b
@@ -240,7 +271,7 @@ def correlation(a, b=None, subtract_mean=False):
         sf = np.conj(fra) * frb
     res = np.fft.ifft(sf)
     cor = np.real(res[: len(a)]) / np.array(range(len(a), 0, -1))
-    return cor
+    return cor[: len(cor) // 2]
 
 
 def forcefield(x_lims, basis, force_coeffs):

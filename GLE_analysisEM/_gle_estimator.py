@@ -13,7 +13,7 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
-from .utils import generateRandomDefPosMat
+from .utils import generateRandomDefPosMat, correlation
 from ._aboba_model import preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, m_step_aboba
 from ._euler_model import preprocessingTraj_euler, compute_expectation_estep_euler, loglikelihood_euler, euler_generator, m_step_euler
 from ._euler_noiseless_model import preprocessingTraj_euler_nl, compute_expectation_estep_euler_nl, loglikelihood_euler_nl, euler_generator_nl, m_step_euler_nl
@@ -322,6 +322,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if not np.all(np.linalg.eigvals(self.sig_init) >= 0):
                 raise ValueError("Provided user values for initial variance of hidden variables is not a definite positive diffusion matrix")
 
+        # We initialize the coefficients value to dummy values to ensure existence of the variables
+        if not hasattr(self, "friction_coeffs"):
+            self.friction_coeffs = np.identity(self.dim_x + self.dim_h)
+        if not hasattr(self, "diffusion_coeffs"):
+            self.diffusion_coeffs = np.identity(self.dim_x + self.dim_h)
+
     def _check_n_features(self, X):
         """Check if we have enough datas to to the fit.
         It is required that  1[time]+2*dim_x[position, velocity]+dim_coeffs_force[force basis] features are present.
@@ -450,9 +456,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for init in range(n_init):
 
             if do_init:
+                if self.init_params == "markov":
+                    self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
                 self._initialize_parameters(random_state)
-                # if self.init_params == "markov":
-                self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
@@ -515,7 +521,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         elif self.model == "euler":
             Xtplus, mutilde, R = compute_expectation_estep_euler(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
         elif self.model == "euler_noiseless":
-            Xtplus, mutilde, R = compute_expectation_estep_euler_nl(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            Xtplus_full, mutilde_full, R = compute_expectation_estep_euler_nl(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+            mutilde = mutilde_full  # [:, self.dim_x :]
+            Xtplus = Xtplus_full  # [:, :0]
         else:
             raise ValueError("Model {} not implemented".format(self.model))
         return filtersmoother(Xtplus, mutilde, R, self.diffusion_coeffs, self.mu0, self.sig0)
@@ -576,6 +584,22 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.force_coeffs = force
         if self.OptimizeDiffusion:
             self.diffusion_coeffs[: self.dim_x, : self.dim_x] = diffusion
+
+    def _get_noise_prop(self, traj):
+        """
+        From current values of parameters, extract remaining noise on visible variables and return its correlation
+        """
+        if self.model == "aboba":
+            Xtplus, mutilde, _ = compute_expectation_estep_aboba(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+        elif self.model == "euler":
+            Xtplus, mutilde, _ = compute_expectation_estep_euler(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+        elif self.model == "euler_noiseless":
+            Xtplus, mutilde, _ = compute_expectation_estep_euler_nl(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
+        else:
+            raise ValueError("Model {} not implemented".format(self.model))
+
+        noise = Xtplus[:-1, :] - mutilde[:-1, : self.dim_x]
+        return correlation(noise), np.mean(noise)
 
     def loglikelihood(self, suff_datas, dim_h=None):
         """

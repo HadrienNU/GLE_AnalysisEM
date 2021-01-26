@@ -18,18 +18,19 @@ pd.set_option("display.max_colwidth", -1)
 
 dim_x = 1
 dim_h = 1
-model = "aboba"
+model = "euler_noiseless"
 shift = 0
-random_state = 7
+random_state = None
 force = -np.identity(dim_x)
-
+A = [[5, 1.0], [-2.0, 0.07]]
+C = 1e-2 * np.identity(dim_x + dim_h)
 basis = GLE_BasisTransform(basis_type="linear")
-generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="user", model=model, random_state=random_state, A_init=[[5, 1.0], [-2.0, 0.07]])
-X, idx, Xh = generator.sample(n_samples=50000, n_trajs=1, x0=0.0, v0=0.0, basis=basis)
+generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, C_init=C, force_init=force, init_params="random", model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=10000, n_trajs=10, x0=0.0, v0=0.0, basis=basis)
 traj_list_h = np.split(Xh, idx)
 time = np.split(X, idx)[0][:, 0]
-# for n, traj in enumerate(traj_list_h):
-#     traj_list_h[n] = traj_list_h[n][:-1, :]
+for n, traj in enumerate(traj_list_h):
+    traj_list_h[n] = traj_list_h[n][:-1, :]
 
 print(generator.get_coefficients())
 
@@ -60,22 +61,28 @@ for n, traj in enumerate(traj_list):
     muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
     datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
 
-est._initialize_parameters(np.random.default_rng())
+est._initialize_parameters(None)
 print(est.get_coefficients())
+print("Real datas")
 print(datas)
 new_stat = 0.0
+noise_corr = 0.0
 for n, traj in enumerate(traj_list):
     datas_visible = sufficient_stats(traj, est.dim_x)
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
     new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
+    n_c, n_m = est._get_noise_prop(traj)
+    noise_corr += n_c / len(traj_list)
+print("Estimated datas")
 print(new_stat)
 
 # np.savetxt("E_step.dat", np.vstack((X[:-1, 0], muh[:-1, 0], np.sqrt(Sigh[:-1, 0, 0]), Xh[:-1, 0])).T)
-
+plt.plot(noise_corr, label="Noise correlation")
+plt.show()
 for k in range(dim_h):
-    plt.plot(time, muh[:, k], label="Prediction (with \\pm 2 \\sigma error lines)", color="blue")
-    plt.plot(time, muh[:, k] + 2 * np.sqrt(Sigh[:, k, k]), "--", color="blue", linewidth=0.1)
-    plt.plot(time, muh[:, k] - 2 * np.sqrt(Sigh[:, k, k]), "--", color="blue", linewidth=0.1)
-    plt.plot(time, traj_list_h[n][:, k], label="Real", color="orange")
+    plt.plot(time[:-1], muh[:, k], label="Prediction (with \\pm 2 \\sigma error lines)", color="blue")
+    plt.plot(time[:-1], muh[:, k] + 2 * np.sqrt(Sigh[:, k, k]), "--", color="blue", linewidth=0.1)
+    plt.plot(time[:-1], muh[:, k] - 2 * np.sqrt(Sigh[:, k, k]), "--", color="blue", linewidth=0.1)
+    plt.plot(time[:-1], traj_list_h[n][:, k], label="Real", color="orange")
     plt.legend(loc="upper right")
     plt.show()
