@@ -223,7 +223,7 @@ def memory_kernel(ntimes, dt, coeffs, dim_x, noDirac=False):
     for n in range(ntimes):
         Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * n * dt * Ahh), Ahv))
     if not noDirac:
-        Kernel[0, :, :] += 2 * Avv
+        Kernel[0, :, :] = Kernel[0, :, :] + 2 * Avv
     return dt * np.arange(ntimes), Kernel
 
 
