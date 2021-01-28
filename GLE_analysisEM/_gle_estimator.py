@@ -98,10 +98,10 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
 
     detd = np.linalg.det(Sigh[:-1, :, :])
     dets = np.linalg.det(Sigh[:-1, dim_h:, dim_h:])
-    hSdouble = 0.5 * 2 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(detd[detd > 1e-12]).mean()
-    hSsimple = 0.5 * dim_h * (1 + np.log(2 * np.pi)) + 0.5 * np.log(dets[dets > 1e-12]).mean()
-
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": hSdouble - hSsimple})
+    hSdouble = 0.5 * np.log(detd[detd > 1e-12]).mean()
+    hSsimple = 0.5 * np.log(dets[dets > 1e-12]).mean()
+    # TODO take care of initial value that is missing
+    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple})
 
 
 def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
@@ -346,7 +346,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.dim_coeffs_force <= 0:
             raise ValueError("X has {} features, but {} is expecting at least {} features as input. Did you forget to add basis features?".format(n_features, self.__class__.__name__, expected_features + 1))
 
-    def _initialize_parameters(self, random_state):
+    def _initialize_parameters(self, random_state, traj_len=50):
         """Initialize the model parameters.
 
         Parameters
@@ -358,7 +358,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         random_state = check_random_state(random_state)
         if self.init_params == "random":
-            A = generateRandomDefPosMat(self.dim_x, self.dim_h, random_state)
+            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
             if self.EnforceFDT:
                 C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
@@ -424,6 +424,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Xproc, idx_trajs = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
         traj_list = np.split(Xproc, idx_trajs)
+        _min_traj_len = np.min([trj.shape[0] for trj in traj_list])
         # print(traj_list)
         # if we enable warm_start, we will have a unique initialisation
         do_init = not (self.warm_start and hasattr(self, "converged_"))
@@ -444,7 +445,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         if self.dim_h == 0:  # Markovian case
             if do_init:
-                self._initialize_parameters(random_state)
+                self._initialize_parameters(random_state, traj_len=_min_traj_len)
             self._m_step_markov(datas_visible)
             n_init = 0  # To avoid running the loop
             self.converged_ = True
@@ -458,7 +459,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if do_init:
                 if self.init_params == "markov":
                     self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
-                self._initialize_parameters(random_state)
+                self._initialize_parameters(random_state, traj_len=_min_traj_len)
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
@@ -471,9 +472,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
                     new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
 
-                lower_bound = self.loglikelihood(new_stat)
+                new_stat_rs = self._rescale_hidden(new_stat)
+                lower_bound = self.loglikelihood(new_stat_rs)
 
-                self._m_step(new_stat)
+                if np.isnan(lower_bound):  # If we have nan value we simply restart the iteration
+                    warnings.warn("Initialization %d has NaN values. Restart iteration" % (init + 1), ConvergenceWarning)
+                    init -= 1
+                    break
+
+                self._m_step(new_stat_rs)
 
                 self.logL[init, n_iter - 1] = lower_bound
                 change = lower_bound - prev_lower_bound
@@ -485,7 +492,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     best_n_iter = n_iter
                     best_n_init = init
 
-                if abs(change) < self.tol:  # We require at least 2 iterations
+                if abs(change) < self.tol:
                     self.converged_ = True
                     if not self.no_stop:
                         break
@@ -499,6 +506,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.n_iter_ = best_n_iter
         self.n_best_init_ = best_n_init
         self.lower_bound_ = max_lower_bound
+        self._print_verbose_msg_fit_end(max_lower_bound, best_n_init, best_n_iter)
 
         return self
 
@@ -526,6 +534,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Xtplus = Xtplus_full  # [:, :0]
         else:
             raise ValueError("Model {} not implemented".format(self.model))
+        # print(np.max(np.imag(mutilde)), np.max(np.imag(R)), np.max(np.imag(self.diffusion_coeffs)))
         return filtersmoother(Xtplus, mutilde, R, self.diffusion_coeffs, self.mu0, self.sig0)
 
     def _m_step(self, sufficient_stat):
@@ -566,6 +575,31 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _enforce_degeneracy(self):
         """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients
         """
+
+    def _rescale_hidden(self, stats):
+        """ Rescale hidden variables values
+        """
+
+        alpha = 1.0 / np.sqrt(np.linalg.norm(stats["Σ_0"]))  # Rescaling factor
+
+        stats["xx"][self.dim_x :, self.dim_x :] = stats["xx"][self.dim_x :, self.dim_x :] * alpha ** 2
+        stats["xx"][self.dim_x :, : self.dim_x] = stats["xx"][self.dim_x :, : self.dim_x] * alpha
+        stats["xx"][: self.dim_x, self.dim_x :] = stats["xx"][: self.dim_x, self.dim_x :] * alpha
+
+        stats["xdx"][self.dim_x :, self.dim_x :] = stats["xdx"][self.dim_x :, self.dim_x :] * alpha ** 2
+        stats["xdx"][self.dim_x :, : self.dim_x] = stats["xdx"][self.dim_x :, : self.dim_x] * alpha
+        stats["xdx"][: self.dim_x, self.dim_x :] = stats["xdx"][: self.dim_x, self.dim_x :] * alpha
+
+        stats["dxdx"][self.dim_x :, self.dim_x :] = stats["dxdx"][self.dim_x :, self.dim_x :] * alpha ** 2
+        stats["dxdx"][self.dim_x :, : self.dim_x] = stats["dxdx"][self.dim_x :, : self.dim_x] * alpha
+        stats["dxdx"][: self.dim_x, self.dim_x :] = stats["dxdx"][: self.dim_x, self.dim_x :] * alpha
+
+        stats["bkx"][:, self.dim_x :] = stats["bkx"][:, self.dim_x :] * alpha
+        stats["bkdx"][:, self.dim_x :] = stats["bkdx"][:, self.dim_x :] * alpha
+        stats["µ_0"] = stats["µ_0"] * alpha
+        stats["Σ_0"] = stats["Σ_0"] * alpha ** 2
+        stats["hS"] = stats["hS"] + 2 * self.dim_h * np.log(alpha)
+        return stats
 
     def _m_step_markov(self, sufficient_stat_vis):
         """ Compute coefficients estimate via Markovian approximation to provide initialization
@@ -720,7 +754,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         self._check_initial_parameters()
         if not (self.warm_start or hasattr(self, "converged_")):
-            self._initialize_parameters(random_state)
+            self._initialize_parameters(random_state, traj_len=n_samples)
 
         if x0 is None:
             x0 = np.zeros((self.dim_x))
@@ -873,4 +907,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         elif self.verbose >= 2:
             print("Initialization converged: %s at step %i \t time lapse %.5fs\t ll %.5f" % (self.converged_, best_iter, time() - self._init_prev_time, ll))
             print("----------------Current parameters values------------------")
+            print(self.get_coefficients())
+
+    def _print_verbose_msg_fit_end(self, ll, best_init, best_iter):
+        """Print verbose message on the end of iteration."""
+        if self.verbose == 1:
+            print("Fit converged: %s Init: %s at step %i \t ll %.5f" % (self.converged_, best_init, best_iter, ll))
+        elif self.verbose >= 2:
+            print("Fit converged: %s Init: %s at step %i \t time lapse %.5fs\t ll %.5f" % (self.converged_, best_init, best_iter, time() - self._init_prev_time, ll))
+            print("----------------Fitted parameters values------------------")
             print(self.get_coefficients())

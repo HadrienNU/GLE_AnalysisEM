@@ -90,8 +90,32 @@ def bootstrap_Datas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, ra
         yield loadDatas_est(nppaths[train_index], dim_x)
 
 
-def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng()):
+def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng(), max_ev=1.0, min_re_ev=0.005):
     """Generate a random value of the A matrix
+    """
+    # A = rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h)) / dim_x + dim_h  # Eigenvalues of A mainly into the unit circle
+    # mat = max_ev * scipy.linalg.expm(0.25 * scipy.linalg.logm(A)) + min_re_ev * np.identity(dim_x + dim_h)  # map the unit circle into the quarter disk
+    return random_gen_bruteforce(dim_x=dim_x, dim_h=dim_h, rng=rng, max_ev=max_ev, min_re_ev=min_re_ev)
+
+
+def random_gen_bruteforce(dim_x=1, dim_h=1, rng=np.random.default_rng(), max_ev=1.0, min_re_ev=0.005):
+    """
+    Brute force generation of correct matrix
+    """
+    notFound = True
+    n = 0
+    while notFound:
+        A = max_ev * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h)) / dim_x + dim_h
+        n += 1
+        if np.all(np.real(np.linalg.eigvals(A)) > min_re_ev) and np.all(np.linalg.eigvals(A + A.T) > min_re_ev):
+            notFound = False
+    # print("Brute force", n, np.linalg.eigvals(A + A.T))
+    return A
+
+
+def oldrandom_gen(dim_x=1, dim_h=1, rng=np.random.default_rng()):
+    """
+    Old code for generating random matrix
     """
     A = 4 * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h))
     # A[dim_x:, :dim_x] = 1

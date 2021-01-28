@@ -9,10 +9,10 @@ Plot obtained values of the parameters versus the actual ones
 import numpy as np
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
-from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation
+from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
 
 dim_x = 1
-dim_h = 2
+dim_h = 1
 random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
@@ -26,9 +26,9 @@ print(generator.get_coefficients())
 
 
 # ------ Estimation ------#
-basis = GLE_BasisTransform(basis_type="bsplines")
+basis = GLE_BasisTransform(basis_type="linear")
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=None)
+estimator = GLE_Estimator(verbose=2, verbose_interval=5, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=42, tol=1e-4)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
@@ -41,7 +41,7 @@ axs[0, 0].set_title("Force field")
 force_fitted = estimator.get_coefficients()["force"]
 if dim_x == 1:
     x_lims = [[-2, 2, 25]]
-    xfx_true = forcefield(x_lims, basis, force)
+    xfx_true = forcefield(x_lims, pot_gen, force)
     xfx = forcefield(x_lims, basis, force_fitted)
     axs[0, 0].plot(xfx_true[:, 0], xfx_true[:, 1], label="True force field")
     axs[0, 0].plot(xfx[:, 0], xfx[:, 1], label="Fitted force field")
@@ -64,6 +64,15 @@ time_true, kernel_true = memory_kernel(500, generator.dt, generator.get_coeffici
 axs[0, 1].plot(time, kernel[:, 0, 0], label="Fitted memory kernel")
 axs[0, 1].plot(time_true, kernel_true[:, 0, 0], label="True memory kernel")
 axs[0, 1].legend(loc="upper right")
+
+# ------ Memory eigenvalues ------#
+mem_ev = memory_timescales(estimator.get_coefficients(), dim_x=dim_x)
+mem_ev_true = memory_timescales(generator.get_coefficients(), dim_x=dim_x)
+axs[1, 1].scatter(np.real(mem_ev), np.imag(mem_ev), label="Ev fitted")
+axs[1, 1].scatter(np.real(mem_ev_true), np.imag(mem_ev_true), label="Ev true")
+# axs[1, 1].set_aspect(1)
+
+
 # ------ Diffusion ------#
 traj_list = np.split(X, idx)
 vacf_num = 0.0
@@ -73,7 +82,7 @@ for n, trj in enumerate(traj_list):
 vacf_num /= len(traj_list)
 
 axs[1, 0].set_title("Velocity autocorrelation function")
-axs[1, 0].plot(time, vacf_num, label="Numerical VACF")
+axs[1, 0].plot(time[: len(time) // 2], vacf_num, label="Numerical VACF")
 axs[1, 0].legend(loc="upper right")
 
 plt.show()

@@ -18,7 +18,7 @@ pd.set_option("display.max_colwidth", -1)
 
 dim_x = 1
 dim_h = 1
-model = "euler_noiseless"
+model = "euler"
 shift = 0
 random_state = None
 force = -np.identity(dim_x)
