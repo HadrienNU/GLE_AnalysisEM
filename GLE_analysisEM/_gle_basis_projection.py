@@ -155,7 +155,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         self.to_combine_ = False
         if self.featuresTransformer is None:
             if self.basis_type == "linear":
-                self.featuresTransformer = FunctionTransformer(lambda x: x).fit(X)
+                self.featuresTransformer = FunctionTransformer(lambda x: x, validate=False).fit(X)
                 self.nb_basis_elt_ = self.dim_x
 
             elif self.basis_type == "polynomial":

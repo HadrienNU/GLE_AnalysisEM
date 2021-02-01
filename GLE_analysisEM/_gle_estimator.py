@@ -359,6 +359,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         random_state = check_random_state(random_state)
         if self.init_params == "random":
             A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
+            alpha=np.linalg.norm(A[: self.dim_x, self.dim_x :])
+            A[self.dim_x :, : self.dim_x] = A[self.dim_x :, : self.dim_x] * alpha
+            A[: self.dim_x, self.dim_x :] = A[: self.dim_x, self.dim_x :]/ alpha
             if self.EnforceFDT:
                 C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
@@ -446,6 +449,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.dim_h == 0:  # Markovian case
             if do_init:
                 self._initialize_parameters(random_state, traj_len=_min_traj_len)
+            self._print_verbose_msg_init_beg(0)
             self._m_step_markov(datas_visible)
             n_init = 0  # To avoid running the loop
             self.converged_ = True
@@ -472,15 +476,18 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
                     new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
 
-                new_stat_rs = self._rescale_hidden(new_stat)
+                # new_stat_rs = self._rescale_hidden(new_stat)
+                new_stat_rs=new_stat
+
+
+                self._m_step(new_stat_rs)
+
                 lower_bound = self.loglikelihood(new_stat_rs)
 
                 if np.isnan(lower_bound):  # If we have nan value we simply restart the iteration
                     warnings.warn("Initialization %d has NaN values. Restart iteration" % (init + 1), ConvergenceWarning)
                     init -= 1
                     break
-
-                self._m_step(new_stat_rs)
 
                 self.logL[init, n_iter - 1] = lower_bound
                 change = lower_bound - prev_lower_bound
