@@ -106,6 +106,7 @@ def random_gen_bruteforce(dim_x=1, dim_h=1, rng=np.random.default_rng(), max_ev=
     n = 0
     while notFound:
         A = max_ev * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h)) / dim_x + dim_h
+        A[:dim_x,dim_x:]=1
         n += 1
         if np.all(np.real(np.linalg.eigvals(A)) > min_re_ev) and np.all(np.linalg.eigvals(A + A.T) > min_re_ev):
             notFound = False
