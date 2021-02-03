@@ -67,6 +67,50 @@ def loadDatas_est(paths, dim_x):
 
     return X, idx_trajs
 
+def loadDatas_pos(paths, dim_x):
+    """Loads some test trajectories
+
+    Parameters
+    ----------
+    paths : list of str
+        List of paths to trajectory files, one trajectory per file
+    dim_x : int
+        Visible dimension
+    """
+
+    X = None
+    idx_trajs = []
+
+    for chemin in paths:
+        trj = np.loadtxt(chemin)
+        tps = np.asarray(trj[:, : 1])
+        pos=np.asarray(trj[:, 1: 1 + dim_x])
+        velocity = np.gradient(pos,tps)
+        tvx=np.vstack((tps,pos,velocity))
+        if X is None:
+            X = txv
+        else:
+            idx_trajs.append(len(X))
+            X = np.vstack((X, txv))
+
+    return X, idx_trajs
+
+def cutTrajs(trj, n_cut):
+    """
+    Cut trajectory into smaller piece
+    """
+    sub_trajs=np.array_split(trj,n_cut)
+
+    X = None
+    idx_trajs = []
+    for txv in sub_trajs:
+        if X is None:
+            X = txv
+        else:
+            idx_trajs.append(len(X))
+            X = np.vstack((X, txv))
+            
+    return X, idx_trajs
 
 def split_loadDatas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, random_state=None):
     """
