@@ -12,7 +12,7 @@ from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
 
 dim_x = 1
-dim_h = 1
+dim_h = 4
 random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
@@ -21,14 +21,14 @@ force = -np.identity(dim_x)
 # ------ Generation ------#
 pot_gen = GLE_BasisTransform(basis_type="linear")
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=10000, n_trajs=150, x0=0.0, v0=0.0, basis=pot_gen)
+X, idx, Xh = generator.sample(n_samples=10000, n_trajs=10, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
 
 
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, verbose_interval=5, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-4, no_stop = False)
+estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-4, no_stop=False)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
@@ -57,8 +57,8 @@ axs[0, 0].legend(loc="upper right")
 
 # ------ Memory kernel ------#
 axs[0, 1].set_title("Memory kernel")
-time, kernel = memory_kernel(500, estimator.dt, estimator.get_coefficients(), dim_x)
-time_true, kernel_true = memory_kernel(500, generator.dt, generator.get_coefficients(), dim_x)
+time, kernel = memory_kernel(1000, estimator.dt, estimator.get_coefficients(), dim_x)
+time_true, kernel_true = memory_kernel(1000, generator.dt, generator.get_coefficients(), dim_x)
 
 
 axs[0, 1].plot(time, kernel[:, 0, 0], label="Fitted memory kernel")
@@ -66,6 +66,7 @@ axs[0, 1].plot(time_true, kernel_true[:, 0, 0], label="True memory kernel")
 axs[0, 1].legend(loc="upper right")
 
 # ------ Memory eigenvalues ------#
+axs[1, 1].set_title("Kernel Eigenvalues")
 mem_ev = memory_timescales(estimator.get_coefficients(), dim_x=dim_x)
 mem_ev_true = memory_timescales(generator.get_coefficients(), dim_x=dim_x)
 axs[1, 1].scatter(np.real(mem_ev), np.imag(mem_ev), label="Ev fitted")

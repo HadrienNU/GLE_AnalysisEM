@@ -120,7 +120,7 @@ def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
 
 
 class GLE_Estimator(DensityMixin, BaseEstimator):
-    """ A GLE estimator based on Expectation-Maximation algorithm.
+    """A GLE estimator based on Expectation-Maximation algorithm.
         We consider that the free energy have been estimated before and constant values of friction and diffusion coefficients are fitted
 
     Parameters
@@ -152,9 +152,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Must be one of::
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
-
-    force : callable, default to lambda x: -1.0*x
-        Evaluation of the force field at x
 
     A_init, C_init, force_init, mu_init, sig_init: array, optional
         The user-provided initial coefficients, defaults to None.
@@ -246,7 +243,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         return {"X_types": "2darray"}
 
     def set_init_coeffs(self, coeffs):
-        """ Set the initial values of the coefficients via a dict
+        """Set the initial values of the coefficients via a dict
 
         Parameters
         ----------
@@ -262,8 +259,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.A_init, self.C_init, self.force_init, self.mu_init, self.sig_init = init_coeffs
 
     def _check_initial_parameters(self):
-        """Check values of the basic parameters.
-        """
+        """Check values of the basic parameters."""
         if self.dt <= 0.0:
             raise ValueError("Invalid value for 'dt': %d " "Timestep should be positive" % self.dt)
         if self.dim_h < 0:
@@ -480,8 +476,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
                 self._m_step(new_stat)
 
-
-
                 if np.isnan(lower_bound):  # If we have nan value we simply restart the iteration
                     warnings.warn("Initialization %d has NaN values. Restart iteration" % (init + 1), ConvergenceWarning)
                     init -= 1
@@ -578,37 +572,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # #     self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
 
     def _enforce_degeneracy(self):
-        """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients
-        """
-
-    def _rescale_hidden(self, stats):
-        """ Rescale hidden variables values
-        """
-
-        alpha = 1.0 / np.sqrt(np.linalg.norm(stats["Σ_0"]))  # Rescaling factor
-
-        stats["xx"][self.dim_x :, self.dim_x :] = stats["xx"][self.dim_x :, self.dim_x :] * alpha ** 2
-        stats["xx"][self.dim_x :, : self.dim_x] = stats["xx"][self.dim_x :, : self.dim_x] * alpha
-        stats["xx"][: self.dim_x, self.dim_x :] = stats["xx"][: self.dim_x, self.dim_x :] * alpha
-
-        stats["xdx"][self.dim_x :, self.dim_x :] = stats["xdx"][self.dim_x :, self.dim_x :] * alpha ** 2
-        stats["xdx"][self.dim_x :, : self.dim_x] = stats["xdx"][self.dim_x :, : self.dim_x] * alpha
-        stats["xdx"][: self.dim_x, self.dim_x :] = stats["xdx"][: self.dim_x, self.dim_x :] * alpha
-
-        stats["dxdx"][self.dim_x :, self.dim_x :] = stats["dxdx"][self.dim_x :, self.dim_x :] * alpha ** 2
-        stats["dxdx"][self.dim_x :, : self.dim_x] = stats["dxdx"][self.dim_x :, : self.dim_x] * alpha
-        stats["dxdx"][: self.dim_x, self.dim_x :] = stats["dxdx"][: self.dim_x, self.dim_x :] * alpha
-
-        stats["bkx"][:, self.dim_x :] = stats["bkx"][:, self.dim_x :] * alpha
-        stats["bkdx"][:, self.dim_x :] = stats["bkdx"][:, self.dim_x :] * alpha
-        stats["µ_0"] = stats["µ_0"] * alpha
-        stats["Σ_0"] = stats["Σ_0"] * alpha ** 2
-        stats["hS"] = stats["hS"] + 2 * self.dim_h * np.log(alpha)
-        return stats
+        """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients"""
 
     def _m_step_markov(self, sufficient_stat_vis):
-        """ Compute coefficients estimate via Markovian approximation to provide initialization
-        """
+        """Compute coefficients estimate via Markovian approximation to provide initialization"""
         if self.model == "aboba":
             friction, force, diffusion = m_step_aboba(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         elif self.model == "euler":
@@ -694,8 +661,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         return lower_bound
 
     def fisher_error():
-        """ Compute asymptotic Fisher Information matrix to provide error estimate
-        """
+        """Compute asymptotic Fisher Information matrix to provide error estimate"""
 
     def predict(self, X, idx_trajs=[]):
         """Predict the hidden variables for the data samples in X using trained model.
@@ -829,10 +795,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         return A, C
 
     def get_coefficients(self):
-        """Return the actual values of the fitted coefficients.
-        """
+        """Return the actual values of the fitted coefficients."""
         A, C = self._convert_local_coefficients()
-        return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs}
+        return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs, "dt": self.dt}
 
     def set_coefficients(self, coeffs):
         """Set the value of the coefficients
