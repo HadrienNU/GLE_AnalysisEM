@@ -5,24 +5,25 @@ import numpy as np
 import scipy.linalg
 
 
-def projA(expA,dim_x,dim_h,dt):
+def projA(expA, dim_x, dim_h, dt):
     """
     From full matrix project onto correct model
     """
     print((-scipy.linalg.logm(expA) / dt))
     A = (-scipy.linalg.logm(expA) / dt).ravel()
-    b=np.zeros((dim_x+dim_h,dim_x+dim_h))
-    b[:dim_x,dim_x:]=1
-    b=b.ravel()
-    X=np.zeros(((dim_x+dim_h)**2,dim_x**2+dim_h*(dim_x+dim_h)))
-    X[dim_x*(dim_x+dim_h):,dim_x**2:]=np.eye(dim_h*(dim_x+dim_h))
+    b = np.zeros((dim_x + dim_h, dim_x + dim_h))
+    b[:dim_x, dim_x:] = 1
+    b = b.ravel()
+    X = np.zeros(((dim_x + dim_h) ** 2, dim_x ** 2 + dim_h * (dim_x + dim_h)))
+    X[dim_x * (dim_x + dim_h) :, dim_x ** 2 :] = np.eye(dim_h * (dim_x + dim_h))
 
     # X[:dim_x*(dim_x+dim_h),:dim_x**2] =
-    X[0,0]=1
+    X[0, 0] = 1
 
     X_p = np.matmul(X, np.linalg.pinv(X))
-    A_p=np.matmul(X_p,A-b)+b
-    return scipy.linalg.expm(-1 * dt * A_p.reshape(dim_x+dim_h,dim_x+dim_h))
+    A_p = np.matmul(X_p, A - b) + b
+    return scipy.linalg.expm(-1 * dt * A_p.reshape(dim_x + dim_h, dim_x + dim_h))
+
 
 def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
     """

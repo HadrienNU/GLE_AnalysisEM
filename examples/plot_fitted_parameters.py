@@ -28,7 +28,11 @@ print(generator.get_coefficients())
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
 X = basis.fit_transform(X)
+<<<<<<< HEAD
 estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-4, no_stop=False)
+=======
+estimator = GLE_Estimator(verbose=2, verbose_interval=5, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-4, no_stop=False)
+>>>>>>> af450c01bedccc8503a5361343c777c1331bfc7a
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
