@@ -12,7 +12,7 @@ from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
 
 dim_x = 1
-dim_h = 4
+dim_h = 1
 random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
@@ -21,18 +21,14 @@ force = -np.identity(dim_x)
 # ------ Generation ------#
 pot_gen = GLE_BasisTransform(basis_type="linear")
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=10000, n_trajs=10, x0=0.0, v0=0.0, basis=pot_gen)
+X, idx, Xh = generator.sample(n_samples=20000, n_trajs=150, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
 
 
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
 X = basis.fit_transform(X)
-<<<<<<< HEAD
-estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-4, no_stop=False)
-=======
-estimator = GLE_Estimator(verbose=2, verbose_interval=5, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-4, no_stop=False)
->>>>>>> af450c01bedccc8503a5361343c777c1331bfc7a
+estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=None, tol=1e-5, no_stop=False)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
