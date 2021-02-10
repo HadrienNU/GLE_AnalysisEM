@@ -387,6 +387,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         if self.sig_init is not None:
             self.sig0 = np.asarray(self.sig_init)
+        elif self.C_init is not None:
+            self.sig0 = self.C_init[self.dim_x :, self.dim_x :]
         else:
             self.sig0 = np.identity(self.dim_h)
         self.initialized_ = True
@@ -639,6 +641,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         check_is_fitted(self, "initialized_")
         X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        self.dt = X[1, 0] - X[0, 0]
         self._check_n_features(X)
 
         Xproc, idx_trajs = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
