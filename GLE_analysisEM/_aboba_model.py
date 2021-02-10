@@ -9,20 +9,14 @@ def projA(expA, dim_x, dim_h, dt):
     """
     From full matrix project onto correct model
     """
-    print((-scipy.linalg.logm(expA) / dt))
-    A = (-scipy.linalg.logm(expA) / dt).ravel()
-    b = np.zeros((dim_x + dim_h, dim_x + dim_h))
-    b[:dim_x, dim_x:] = 1
-    b = b.ravel()
-    X = np.zeros(((dim_x + dim_h) ** 2, dim_x ** 2 + dim_h * (dim_x + dim_h)))
-    X[dim_x * (dim_x + dim_h) :, dim_x ** 2 :] = np.eye(dim_h * (dim_x + dim_h))
-
-    # X[:dim_x*(dim_x+dim_h),:dim_x**2] =
-    X[0, 0] = 1
-
-    X_p = np.matmul(X, np.linalg.pinv(X))
-    A_p = np.matmul(X_p, A - b) + b
-    return scipy.linalg.expm(-1 * dt * A_p.reshape(dim_x + dim_h, dim_x + dim_h))
+    # print((-scipy.linalg.logm(expA) / dt))
+    A = -scipy.linalg.logm(expA) / dt
+    A[dim_x:, :dim_x] = 0
+    A[:dim_x, dim_x:] = 0
+    min_dim = min(dim_x, dim_h)
+    A[dim_x : dim_x + min_dim, :min_dim] = -np.eye(min_dim)
+    A[:min_dim, dim_x : dim_x + min_dim] = np.eye(min_dim)
+    return scipy.linalg.expm(-1 * dt * A)
 
 
 def preprocessingTraj_aboba(X, idx_trajs=[], dim_x=1):
@@ -71,8 +65,7 @@ def mle_derivative_expA_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):
 
 
 def mle_FDT(theta, dxdx, xdx, xx, bkbk, bkdx, bkx, dim_tot):
-    """Value of the ml
-    """
+    """Value of the ml"""
     expA = theta[:-1].reshape((dim_tot, dim_tot))
     kbT = theta[-1]
     # k is the chosen derivative
@@ -111,6 +104,8 @@ def m_step_aboba(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusio
     YX = sufficient_stat["xdx"].T - np.matmul(sufficient_stat["bkdx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
     XX = sufficient_stat["xx"] - np.matmul(sufficient_stat["bkx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
     expA = Id + np.matmul(YX, np.linalg.inv(XX))
+
+    # expA = projA(expA, dim_x, dim_h, dt)
 
     Pf = np.zeros((dim_x + dim_h, dim_x))
     Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
