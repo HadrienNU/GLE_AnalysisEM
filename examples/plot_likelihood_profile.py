@@ -40,6 +40,7 @@ estimator._initialize_parameters(random_state=None)
 print(estimator.score(X, idx_trajs=idx))
 # print(estimator.get_coefficients())
 
+inits_coeffs["Σ_0"] = 0.1
 # ------ Plotting ------#
 nb_points = 25
 fig, axs = plt.subplots(1, 3)

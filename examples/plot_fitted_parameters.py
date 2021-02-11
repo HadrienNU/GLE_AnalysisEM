@@ -36,7 +36,7 @@ force = -np.identity(dim_x)
 pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=20000, n_trajs=150, x0=0.0, v0=0.0, basis=pot_gen)
+X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
 
 
@@ -44,7 +44,7 @@ print(generator.get_coefficients())
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=0, model=model, n_init=10, EnforceFDT=False, random_state=None, tol=1e-5, no_stop=False)
+estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-5, no_stop=False)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
