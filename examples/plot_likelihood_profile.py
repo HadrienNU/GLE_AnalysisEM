@@ -9,7 +9,7 @@ Plot obtained values of the parameters versus the actual ones
 import numpy as np
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
-from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
+import pickle
 
 import copy
 
@@ -43,9 +43,11 @@ print(estimator.score(X, idx_trajs=idx))
 inits_coeffs["Σ_0"] = 0.1
 # ------ Plotting ------#
 nb_points = 25
-fig, axs = plt.subplots(1, 3)
+nb_plot = 4
+fig, axs = plt.subplots(1, nb_plot)
+
 x_coords = np.linspace(4.7, 5.2, nb_points)
-y_coords = np.linspace(0.05, 10, nb_points)
+y_coords = np.linspace(0.05, 2, nb_points)
 score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
 for i, a in enumerate(x_coords):
     for j, b in enumerate(y_coords):
@@ -60,29 +62,93 @@ for i, a in enumerate(x_coords):
         # print(estimator.get_coefficients()["A"])
 axs[0].contour(x_coords, y_coords, np.log(score_val), cmap="jet", levels=100)
 axs[0].set_title("Log log likelihood")
-axs[1].set_title("Cross section along A[1,1]")
-for i in range(nb_points):
-    axs[1].plot(y_coords, score_val[:, i])
+axs[0].set_xlabel("A[0,0]")
+axs[0].set_ylabel("A[1,1]")
+
+
+# axs[1].set_title("Cross section along A[1,1]")
+# for i in range(nb_points):
+#     axs[1].plot(y_coords, score_val[:, i])
 
 
 inits_coeffs = inits_coeffs_reset
-sig_coords = np.linspace(0.05, 10, 25)
-score_val_sig = np.empty(sig_coords.shape)
-for i, sig in enumerate(sig_coords):
-    inits_coeffs["Σ_0"] = sig
+force_coords = np.linspace(-2, 0, 25)
+score_val_force = np.empty(force_coords.shape)
+for i, f in enumerate(force_coords):
+    inits_coeffs["force"] = np.array([[f]])
     estimator.set_init_coeffs(inits_coeffs)
     estimator._initialize_parameters(random_state=None)
-    score_val_sig[i] = estimator.score(X, idx_trajs=idx)
-axs[2].plot(sig_coords, score_val_sig)
+    score_val_force[i] = estimator.score(X, idx_trajs=idx)
+axs[1].plot(force_coords, score_val_force)
+axs[1].set_xlabel("Force")
+axs[1].set_ylabel("ll")
 
-inits_coeffs = inits_coeffs_reset
-sig_coords = np.linspace(-10, 10, 25)
-score_val_sig = np.empty(sig_coords.shape)
-for i, sig in enumerate(sig_coords):
-    inits_coeffs["µ_0"] = sig
-    estimator.set_init_coeffs(inits_coeffs)
-    estimator._initialize_parameters(random_state=None)
-    score_val_sig[i] = estimator.score(X, idx_trajs=idx)
-axs[2].plot(sig_coords, score_val_sig)
-axs[2].set_title("Loglikelihood along µ_0,Σ_0 ")
+
+x_coords = np.linspace(-2.5, 2.5, nb_points)
+y_coords = np.linspace(0.05, 2, nb_points)
+score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
+for i, a in enumerate(x_coords):
+    for j, b in enumerate(y_coords):
+        A[0, 0] = a
+        A[1, 1] = b
+        inits_coeffs["µ_0"] = a
+        inits_coeffs["Σ_0"] = b
+        estimator.set_init_coeffs(inits_coeffs)
+
+        estimator._initialize_parameters(random_state=None)
+        score_val[j, i] = estimator.score(X, idx_trajs=idx)
+        print(i, j, a, b, score_val[j, i])
+        # print(estimator.get_coefficients()["A"])
+axs[2].contour(x_coords, y_coords, np.log(score_val), cmap="jet", levels=100)
+axs[2].set_xlabel("µ_0")
+axs[2].set_ylabel("Σ_0")
+
+x_coords = np.linspace(0.9, 1.1, nb_points)
+y_coords = np.linspace(0.1, 1.5, nb_points)
+score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
+for i, a in enumerate(x_coords):
+    for j, b in enumerate(y_coords):
+        C[0, 0] = a
+        C[1, 1] = b
+        inits_coeffs["C"] = C
+        estimator.set_init_coeffs(inits_coeffs)
+
+        estimator._initialize_parameters(random_state=None)
+        score_val[j, i] = estimator.score(X, idx_trajs=idx)
+        print(i, j, a, b, score_val[j, i])
+        # print(estimator.get_coefficients()["A"])
+axs[3].contour(x_coords, y_coords, np.log(score_val), cmap="jet", levels=100)
+axs[3].set_title("Log log likelihood")
+
+axs[3].set_xlabel("C[0,0]")
+axs[3].set_ylabel("C[1,1]")
+
+with open("fig_profile.pkl", "wb") as output:
+    pickle.dump(fig, output)
+
+# -------------  Plotting trajs of EM -----------------
+
+fo = open("fit_trajs.pkl", "rb")
+fit_trajs = pickle.load(fo)
+
+for coeffs_list in fit_trajs:
+    len_iter = len(coeffs_list)
+
+    x = np.empty((nb_plot, len_iter))
+    y = np.empty((nb_plot, len_iter))
+    for n, step in enumerate(coeffs_list):
+        x[0, n] = step["A"][0, 0]
+        y[0, n] = step["A"][1, 1]
+        x[1, n] = step["force"][0, 0]
+        y[1, n] = step["ll"]
+        x[2, n] = step["µ_0"][0]
+        y[2, n] = step["Σ_0"][0, 0]
+        x[3, n] = step["C"][0, 0]
+        y[3, n] = step["C"][1, 1]
+    for i in range(nb_plot):
+        axs[i].plot(x[i, :], y[i, :], "-x", label="{}".format(n))
+
+with open("fig_profile_with_trajs.pkl", "wb") as output:
+    pickle.dump(fig, output)
+
 plt.show()

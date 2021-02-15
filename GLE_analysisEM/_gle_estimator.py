@@ -453,8 +453,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             best_n_init = 0
             max_lower_bound = self.loglikelihood(datas_visible, dim_h=0)
 
-        for init in range(n_init):
+        self.coeffs_list_all = []
 
+        for init in range(n_init):
+            coeff_list_init = []
             if do_init:
                 if self.init_params == "markov":
                     self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
@@ -475,6 +477,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 # new_stat_rs=new_stat
 
                 lower_bound = self.loglikelihood(new_stat)
+                curr_coeffs = self.get_coefficients()
+                curr_coeffs["ll"] = lower_bound
+                coeff_list_init.append(curr_coeffs)
 
                 self._m_step(new_stat)
 
@@ -499,7 +504,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                         break
 
             self._print_verbose_msg_init_end(lower_bound, n_iter)
-
+            self.coeffs_list_all.append(coeff_list_init)
             if not self.converged_:
                 warnings.warn("Initialization %d did not converge. " "Try different init parameters, " "or increase max_iter, tol " "or check for degenerate data." % (init + 1), ConvergenceWarning)
 
@@ -555,7 +560,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.OptimizeForce:
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
-        self.sig0 = sufficient_stat["Σ_0"]
+        # self.sig0 = sufficient_stat["Σ_0"]
         # A, C = self._convert_local_coefficients()
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
@@ -625,7 +630,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             ll = loglikelihood_euler_nl(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
-        return ll + suff_datas["hS"]
+        if dim_h > 0:
+            return ll + suff_datas["hS"]
+        else:
+            return ll
 
     def score(self, X, y=None, idx_trajs=[], Xh=None):
         """Compute the per-sample average log-likelihood of the given data X.
