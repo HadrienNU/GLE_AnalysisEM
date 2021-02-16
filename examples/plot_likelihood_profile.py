@@ -40,12 +40,12 @@ estimator._initialize_parameters(random_state=None)
 print(estimator.score(X, idx_trajs=idx))
 # print(estimator.get_coefficients())
 
-inits_coeffs["Σ_0"] = 0.1
+# inits_coeffs["Σ_0"] = 0.1
 # ------ Plotting ------#
 nb_points = 25
 nb_plot = 4
 fig, axs = plt.subplots(1, nb_plot)
-
+inits_coeffs = copy.deepcopy(inits_coeffs_reset)
 x_coords = np.linspace(4.7, 5.2, nb_points)
 y_coords = np.linspace(0.05, 2, nb_points)
 score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
@@ -71,7 +71,7 @@ axs[0].set_ylabel("A[1,1]")
 #     axs[1].plot(y_coords, score_val[:, i])
 
 
-inits_coeffs = inits_coeffs_reset
+inits_coeffs = copy.deepcopy(inits_coeffs_reset)
 force_coords = np.linspace(-2, 0, 25)
 score_val_force = np.empty(force_coords.shape)
 for i, f in enumerate(force_coords):
@@ -84,15 +84,19 @@ axs[1].set_xlabel("Force")
 axs[1].set_ylabel("ll")
 
 
-x_coords = np.linspace(-2.5, 2.5, nb_points)
-y_coords = np.linspace(0.05, 2, nb_points)
+inits_coeffs = copy.deepcopy(inits_coeffs_reset)
+A = np.array([[5, 1.0], [-1.0, 0.5]])
+C = np.identity(dim_x + dim_h)
+x_coords = np.linspace(-25, 25, nb_points)
+y_coords = np.linspace(-25, 25, nb_points)
 score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
 for i, a in enumerate(x_coords):
     for j, b in enumerate(y_coords):
-        A[0, 0] = a
-        A[1, 1] = b
-        inits_coeffs["µ_0"] = a
-        inits_coeffs["Σ_0"] = b
+        A[0, 1] = a
+        A[1, 0] = b
+        inits_coeffs["A"] = A
+        # inits_coeffs["µ_0"] = a
+        # inits_coeffs["Σ_0"] = b
         estimator.set_init_coeffs(inits_coeffs)
 
         estimator._initialize_parameters(random_state=None)
@@ -100,16 +104,22 @@ for i, a in enumerate(x_coords):
         print(i, j, a, b, score_val[j, i])
         # print(estimator.get_coefficients()["A"])
 axs[2].contour(x_coords, y_coords, np.log(score_val), cmap="jet", levels=100)
-axs[2].set_xlabel("µ_0")
-axs[2].set_ylabel("Σ_0")
-
-x_coords = np.linspace(0.9, 1.1, nb_points)
-y_coords = np.linspace(0.1, 1.5, nb_points)
+axs[2].set_xlabel("A[0,1]")
+axs[2].set_ylabel("A[1,0]")
+# axs[2].set_xlabel("µ_0")
+# axs[2].set_ylabel("Σ_0")
+inits_coeffs = copy.deepcopy(inits_coeffs_reset)
+A = np.array([[5, 1.0], [-1.0, 0.5]])
+C = np.identity(dim_x + dim_h)
+x_coords = np.linspace(0, 1.1, nb_points)
+y_coords = np.linspace(0.05, 1.5, nb_points)
 score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
 for i, a in enumerate(x_coords):
     for j, b in enumerate(y_coords):
-        C[0, 0] = a
+        # C[0, 0] = a
+        A[1, 1] = a
         C[1, 1] = b
+        inits_coeffs["A"] = A
         inits_coeffs["C"] = C
         estimator.set_init_coeffs(inits_coeffs)
 
@@ -120,7 +130,7 @@ for i, a in enumerate(x_coords):
 axs[3].contour(x_coords, y_coords, np.log(score_val), cmap="jet", levels=100)
 axs[3].set_title("Log log likelihood")
 
-axs[3].set_xlabel("C[0,0]")
+axs[3].set_xlabel("A[1,1]")
 axs[3].set_ylabel("C[1,1]")
 
 with open("fig_profile.pkl", "wb") as output:
@@ -141,9 +151,11 @@ for coeffs_list in fit_trajs:
         y[0, n] = step["A"][1, 1]
         x[1, n] = step["force"][0, 0]
         y[1, n] = step["ll"]
-        x[2, n] = step["µ_0"][0]
-        y[2, n] = step["Σ_0"][0, 0]
-        x[3, n] = step["C"][0, 0]
+        x[2, n] = step["A"][0, 1]
+        y[2, n] = step["A"][1, 0]
+        # x[2, n] = step["µ_0"][0]
+        # y[2, n] = step["Σ_0"][0, 0]
+        x[3, n] = step["A"][1, 1]
         y[3, n] = step["C"][1, 1]
     for i in range(nb_plot):
         axs[i].plot(x[i, :], y[i, :], "-x", label="{}".format(n))
