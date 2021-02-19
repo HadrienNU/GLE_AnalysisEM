@@ -54,7 +54,7 @@ class Markov_Estimator(GLE_Estimator):
         for each step.
     """
 
-    def __init__(self, dim_x=1, tol=5e-4, OptimizeForce=True, OptimizeDiffusion=True, EnforceFDT=False, model="aboba", random_state=None, warm_start=False, verbose=0):
+    def __init__(self, dim_x=1, tol=5e-4, OptimizeForce=True, OptimizeDiffusion=True, EnforceFDT=False, model="aboba", random_state=None, warm_start=False, verbose=0, **kwargs):
         super(Markov_Estimator, self).__init__(
             dim_x=dim_x,
             dim_h=0,
@@ -126,15 +126,10 @@ class Markov_Estimator(GLE_Estimator):
         self._m_step_markov(datas_visible)
         n_init = 0  # To avoid running the loop
         self.converged_ = True
-        best_coeffs = self.get_coefficients()
-        best_n_iter = 0
-        best_n_init = 0
         max_lower_bound = self.loglikelihood(datas_visible, dim_h=0)
-
-        self.set_coefficients(best_coeffs)
-        self.n_iter_ = best_n_iter
-        self.n_best_init_ = best_n_init
+        self.n_iter_ = 0
+        self.n_best_init_ = 0
         self.lower_bound_ = max_lower_bound
-        self._print_verbose_msg_fit_end(max_lower_bound, best_n_init, best_n_iter)
+        self._print_verbose_msg_fit_end(max_lower_bound, 0, 0)
 
         return self
