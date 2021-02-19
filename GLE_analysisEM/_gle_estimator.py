@@ -464,6 +464,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
+            lower_bound_m_step = -np.infty
             # Algorithm loop
             for n_iter in range(1, self.max_iter + 1):
                 prev_lower_bound = lower_bound
@@ -477,11 +478,18 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 # new_stat_rs=new_stat
 
                 lower_bound = self.loglikelihood(new_stat)
+                if self.verbose >= 2:
+                    if lower_bound - lower_bound_m_step < 0:
+                        print("Delta ll after E step:", lower_bound - lower_bound_m_step)
                 curr_coeffs = self.get_coefficients()
                 curr_coeffs["ll"] = lower_bound
                 coeff_list_init.append(curr_coeffs)
 
                 self._m_step(new_stat)
+                if self.verbose >= 2:
+                    lower_bound_m_step = self.loglikelihood(new_stat)
+                    if lower_bound_m_step - lower_bound < 0:
+                        print("Delta ll after M step:", lower_bound_m_step - lower_bound)
 
                 if np.isnan(lower_bound):  # If we have nan value we simply restart the iteration
                     warnings.warn("Initialization %d has NaN values. Restart iteration" % (init + 1), ConvergenceWarning)

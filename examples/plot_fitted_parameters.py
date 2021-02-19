@@ -9,6 +9,8 @@ Plot obtained values of the parameters versus the actual ones
 import numpy as np
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
+
+# from GLE_analysisEM import Markov_Estimator
 from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
 
 from sklearn.preprocessing import FunctionTransformer
@@ -44,7 +46,7 @@ print(generator.get_coefficients())
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=10, EnforceFDT=False, random_state=43, tol=1e-5, no_stop=False)
+estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=False, random_state=None, tol=1e-5, no_stop=False)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
@@ -56,7 +58,7 @@ fig, axs = plt.subplots(2, 2)
 axs[0, 0].set_title("Force field")
 force_fitted = estimator.get_coefficients()["force"]
 if dim_x == 1:
-    x_lims = [[-2, 2, 25]]
+    x_lims = [[-10, 10, 25]]
     xfx_true = forcefield(x_lims, pot_gen, force)
     xfx = forcefield(x_lims, basis, force_fitted)
     axs[0, 0].plot(xfx_true[:, 0], xfx_true[:, 1], label="True force field")

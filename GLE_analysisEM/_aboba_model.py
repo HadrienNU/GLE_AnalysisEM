@@ -11,10 +11,10 @@ def projA(expA, dim_x, dim_h, dt):
     """
     # print((-scipy.linalg.logm(expA) / dt))
     A = -scipy.linalg.logm(expA) / dt
-    A[dim_x:, :dim_x] = 0
+    # A[dim_x:, :dim_x] = 0
     A[:dim_x, dim_x:] = 0
     min_dim = min(dim_x, dim_h)
-    A[dim_x : dim_x + min_dim, :min_dim] = -np.eye(min_dim)
+    # A[dim_x : dim_x + min_dim, :min_dim] = -np.eye(min_dim)
     A[:min_dim, dim_x : dim_x + min_dim] = np.eye(min_dim)
     return scipy.linalg.expm(-1 * dt * A)
 
@@ -87,9 +87,7 @@ def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
     """
     Pf = np.zeros((dim_x + dim_h, dim_x))
     Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
-    mutilde = (
-        np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))
-    ).T
+    mutilde = (np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))).T
 
     return traj[:, :dim_x], mutilde, expA[:, dim_x:]
 

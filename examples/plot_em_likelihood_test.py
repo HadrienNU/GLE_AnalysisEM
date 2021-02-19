@@ -19,19 +19,38 @@ pd.set_option("display.max_colwidth", -1)
 
 dim_x = 1
 dim_h = 1
+random_state = 42
 model = "aboba"
-random_state = None
 force = -np.identity(dim_x)
 
-basis = GLE_BasisTransform(basis_type="linear")
-generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="user", model=model, random_state=random_state, A_init=[[5, 1.0], [-2.0, 0.7]])
-X, idx, Xh = generator.sample(n_samples=50000, n_trajs=5, x0=0.0, v0=0.0, basis=basis)
-traj_list_h = np.split(Xh, idx)
-X = basis.fit_transform(X)
+A = np.array([[5, 1.0], [-1.0, 0.5]])
+C = np.identity(dim_x + dim_h)
+# ------ Generation ------#
+pot_gen = GLE_BasisTransform(basis_type="linear")
+# pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="user", A_init=A, C_init=C, model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=10000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
+# ------ Estimation ------#
+basis = GLE_BasisTransform(basis_type="linear")
+X = basis.fit_transform(X)
+est = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=5, EnforceFDT=False, OptimizeDiffusion=False, random_state=43, tol=1e-3, no_stop=True, max_iter=100)
 
-est = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, OptimizeDiffusion=True, random_state=None, max_iter=15, A_init=[[5.5, 0.8], [-1.0, 0.08]], force_init=force)
-# est.set_init_coeffs(generator.get_coefficients())
+# dim_x = 1
+# dim_h = 1
+# model = "aboba"
+# random_state = None
+# force = -np.identity(dim_x)
+#
+# basis = GLE_BasisTransform(basis_type="linear")
+# generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="user", model=model, random_state=random_state, A_init=[[5, 1.0], [-2.0, 0.7]])
+# X, idx, Xh = generator.sample(n_samples=50000, n_trajs=5, x0=0.0, v0=0.0, basis=basis)
+traj_list_h = np.split(Xh, idx)
+# X = basis.fit_transform(X)
+# print(generator.get_coefficients())
+#
+# est = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, OptimizeDiffusion=True, random_state=None, max_iter=15, A_init=[[5.5, 0.8], [-1.0, 0.08]], force_init=force)
+# # est.set_init_coeffs(generator.get_coefficients())
 est.dt = X[1, 0] - X[0, 0]
 
 est._check_initial_parameters()
@@ -74,8 +93,8 @@ print(new_stat)
 print(generator.loglikelihood(new_stat))
 print(est.get_coefficients())
 plt.figure("Log likelihood")
-plt.plot(to_plot_logL[:, 0], label="After E step")
-plt.plot(to_plot_logL[:, 1], label="After M step")
+plt.plot(to_plot_logL[:, 0], "-p", label="After E step")
+plt.plot(to_plot_logL[:, 1], "-p", label="After M step")
 plt.plot(to_plot_logL_true_datas, label="True Datas")
 plt.plot(to_plot_logL_true_param, label="True Param")
 # plt.plot(to_plot_logL[:, 2], label="After E step Norm")
