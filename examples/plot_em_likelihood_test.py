@@ -7,15 +7,16 @@ Inner working of the fit method :class:`GLE_analysisEM.GLE_Estimator.fit`
 Plot the likelihood increase after one EM step
 """
 import numpy as np
-import pandas as pd
+
+# import pandas as pd
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
 
 # Printing options
-pd.set_option("display.max_rows", None)
-pd.set_option("display.max_columns", None)
-pd.set_option("display.width", None)
-pd.set_option("display.max_colwidth", -1)
+# pd.set_option("display.max_rows", None)
+# pd.set_option("display.max_columns", None)
+# pd.set_option("display.width", None)
+# pd.set_option("display.max_colwidth", -1)
 
 dim_x = 1
 dim_h = 1
@@ -34,7 +35,7 @@ print(generator.get_coefficients())
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
 X = basis.fit_transform(X)
-est = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=5, EnforceFDT=False, OptimizeDiffusion=False, random_state=43, tol=1e-3, no_stop=True, max_iter=100)
+est = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=5, EnforceFDT=False, OptimizeDiffusion=False, random_state=42, tol=1e-3, no_stop=True, max_iter=100)
 
 # dim_x = 1
 # dim_h = 1
@@ -57,8 +58,8 @@ est._check_initial_parameters()
 est._check_n_features(X)
 Xproc, idx = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x, model=model)
 traj_list = np.split(Xproc, idx)
-est._initialize_parameters(random_state=random_state)
-
+est._initialize_parameters(random_state=est.random_state)
+print(est.get_coefficients())
 datas_visible = 0.0
 datas_true = 0.0
 for n, traj in enumerate(traj_list):

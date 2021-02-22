@@ -14,7 +14,7 @@ from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 
 from .utils import generateRandomDefPosMat, correlation
-from ._aboba_model import preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, m_step_aboba
+from ._aboba_model import preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, m_step_aboba, m_step_num_aboba
 from ._euler_model import preprocessingTraj_euler, compute_expectation_estep_euler, loglikelihood_euler, euler_generator, m_step_euler
 from ._euler_noiseless_model import preprocessingTraj_euler_nl, compute_expectation_estep_euler_nl, loglikelihood_euler_nl, euler_generator_nl, m_step_euler_nl
 from ._gle_basis_projection import GLE_BasisTransform
@@ -485,7 +485,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 curr_coeffs["ll"] = lower_bound
                 coeff_list_init.append(curr_coeffs)
 
-                self._m_step(new_stat)
+                self._m_step_num(new_stat)
                 if self.verbose >= 2:
                     lower_bound_m_step = self.loglikelihood(new_stat)
                     if lower_bound_m_step - lower_bound < 0:
@@ -550,6 +550,22 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             raise ValueError("Model {} not implemented".format(self.model))
         # print(np.max(np.imag(mutilde)), np.max(np.imag(R)), np.max(np.imag(self.diffusion_coeffs)))
         return filtersmoother(Xtplus, mutilde, R, self.diffusion_coeffs, self.mu0, self.sig0)
+
+    def _m_step_num(self, sufficient_stat):
+        """
+        Numerical minimization
+        """
+        if self.model == "aboba":
+            friction, force, diffusion = m_step_num_aboba(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        self.friction_coeffs = friction
+        if self.OptimizeForce:
+            self.force_coeffs = force
+        self.mu0 = sufficient_stat["µ_0"]
+        # self.sig0 = sufficient_stat["Σ_0"]
+        # A, C = self._convert_local_coefficients()
+        # self.sig0 = C[self.dim_x :, self.dim_x :]
+        if self.OptimizeDiffusion:
+            self.diffusion_coeffs = diffusion
 
     def _m_step(self, sufficient_stat):
         """M step.
@@ -638,7 +654,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             ll = loglikelihood_euler_nl(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
-        if dim_h > 0:
+        if dim_h > 0 and not np.isnan(suff_datas["hS"]):
             return ll + suff_datas["hS"]
         else:
             return ll

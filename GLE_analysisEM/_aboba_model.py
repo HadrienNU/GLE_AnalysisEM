@@ -3,6 +3,8 @@ This the main estimator module
 """
 import numpy as np
 import scipy.linalg
+import warnings
+from sklearn.exceptions import ConvergenceWarning
 
 
 def projA(expA, dim_x, dim_h, dt):
@@ -87,7 +89,9 @@ def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
     """
     Pf = np.zeros((dim_x + dim_h, dim_x))
     Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
-    mutilde = (np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))).T
+    mutilde = (
+        np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))
+    ).T
 
     return traj[:, :dim_x], mutilde, expA[:, dim_x:]
 
@@ -137,6 +141,46 @@ def m_step_aboba(sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusio
     #     diffusion_coeffs = sol.x[-1] * (Id - np.matmul(friction_coeffs, friction_coeffs.T))
 
     return expA, force_coeffs, SST
+
+
+def negloglike_tominimize(theta, suff_datas, dim_x, dim_h, dt):
+    expA = theta[: (dim_x + dim_h) ** 2].reshape(dim_x + dim_h, dim_x + dim_h)
+    SST = theta[(dim_x + dim_h) ** 2 : 2 * (dim_x + dim_h) ** 2].reshape(dim_x + dim_h, dim_x + dim_h)
+    SST = 0.5 * (SST + SST.T)
+    coeffs_force = theta[2 * (dim_x + dim_h) ** 2 :].reshape(dim_x, -1)
+    return -loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt)
+
+
+def negloglike_tominimize_FDT(theta, suff_datas, dim_x, dim_h, dt):
+    expA = theta[: (dim_x + dim_h) ** 2].reshape(dim_x + dim_h, dim_x + dim_h)
+    kbT = theta[(dim_x + dim_h) ** 2]
+    coeffs_force = theta[(dim_x + dim_h) ** 2 + 1 :].reshape(dim_x, -1)
+    SST = kbT * (np.eye(dim_x + dim_h) - np.matmul(expA, np.matmul(np.eye(dim_x + dim_h), expA.T)))
+    # print(np.linalg.eigvals(SST))
+    return -loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt)
+
+
+def m_step_num_aboba(expA, SST, coeffs_force, sufficient_stat, dim_x, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+    """
+    Do numerical maximization instead of analytical one
+    """
+    if EnforceFDT:
+        theta0 = np.concatenate((expA.flatten(), [1.0], coeffs_force.flatten()))
+        sol = scipy.optimize.minimize(negloglike_tominimize_FDT, theta0, args=(sufficient_stat, dim_x, dim_h, dt), method="Nelder-Mead")
+        expA_sol = sol.x[: (dim_x + dim_h) ** 2].reshape(dim_x + dim_h, dim_x + dim_h)
+        kbT = sol.x[(dim_x + dim_h) ** 2]
+        force_coeffs_sol = sol.x[(dim_x + dim_h) ** 2 + 1 :].reshape(dim_x, -1)
+        print(kbT)
+        SST_sol = kbT * (np.eye(dim_x + dim_h) - np.matmul(expA_sol, np.matmul(np.eye(dim_x + dim_h), expA_sol.T)))
+    else:
+        theta0 = np.concatenate((expA.flatten(), SST.flatten(), coeffs_force.flatten()))
+        sol = scipy.optimize.minimize(negloglike_tominimize, theta0, args=(sufficient_stat, dim_x, dim_h, dt), method="Nelder-Mead", options={"maxfev": 5000})
+        expA_sol = sol.x[: (dim_x + dim_h) ** 2].reshape(dim_x + dim_h, dim_x + dim_h)
+        SST_sol = sol.x[(dim_x + dim_h) ** 2 : 2 * (dim_x + dim_h) ** 2].reshape(dim_x + dim_h, dim_x + dim_h)
+        force_coeffs_sol = sol.x[2 * (dim_x + dim_h) ** 2 :].reshape(dim_x, -1)
+    if not sol.success:
+        warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
+    return expA_sol, force_coeffs_sol, SST_sol
 
 
 def loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt):

@@ -29,7 +29,7 @@ print(generator.get_coefficients())
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=5, EnforceFDT=False, OptimizeDiffusion=False, random_state=43, tol=1e-3, no_stop=True, max_iter=100)
+estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=5, EnforceFDT=True, OptimizeDiffusion=True, random_state=42, tol=1e-3, no_stop=True, max_iter=100)
 estimator.fit(X, idx_trajs=idx)
 with open("fit_trajs.pkl", "wb") as output:
     pickle.dump(estimator.coeffs_list_all, output)
@@ -48,8 +48,13 @@ for coeffs_list in coeffs_list_all:
     x = np.empty((nb_plot, len_iter))
     y = np.empty((nb_plot, len_iter))
     for n, step in enumerate(coeffs_list):
+        eigs_A = np.linalg.eigvals(step["A"])
         x[0, n] = step["A"][0, 0]
         y[0, n] = step["A"][1, 1]
+        # x[1, n] = np.real(eigs_A[0])
+        # y[1, n] = np.imag(eigs_A[0])
+        # x[2, n] = np.real(eigs_A[1])
+        # y[2, n] = np.imag(eigs_A[1])
         x[1, n] = step["force"][0, 0]
         y[1, n] = step["ll"]
         x[2, n] = step["µ_0"][0]
@@ -58,6 +63,7 @@ for coeffs_list in coeffs_list_all:
         y[3, n] = step["C"][1, 1]
     for i in range(nb_plot):
         axs[i].plot(x[i, :], y[i, :], "-x", label="{}".format(n))
+    # axs[1].plot(x[2, :], y[2, :], "-x", label="{}".format(n))
 axs[0].set_xlabel("A[0,0]")
 axs[0].set_ylabel("A[1,1]")
 axs[1].set_xlabel("n")
