@@ -156,7 +156,6 @@ def negloglike_tominimize_FDT(theta, suff_datas, dim_x, dim_h, dt):
     kbT = theta[(dim_x + dim_h) ** 2]
     coeffs_force = theta[(dim_x + dim_h) ** 2 + 1 :].reshape(dim_x, -1)
     SST = kbT * (np.eye(dim_x + dim_h) - np.matmul(expA, np.matmul(np.eye(dim_x + dim_h), expA.T)))
-    # print(np.linalg.eigvals(SST))
     return -loglikelihood_aboba(suff_datas, expA, SST, coeffs_force, dim_x, dim_h, dt)
 
 
@@ -170,7 +169,7 @@ def m_step_num_aboba(expA, SST, coeffs_force, sufficient_stat, dim_x, dim_h, dt,
         expA_sol = sol.x[: (dim_x + dim_h) ** 2].reshape(dim_x + dim_h, dim_x + dim_h)
         kbT = sol.x[(dim_x + dim_h) ** 2]
         force_coeffs_sol = sol.x[(dim_x + dim_h) ** 2 + 1 :].reshape(dim_x, -1)
-        print(kbT)
+        # print(kbT)
         SST_sol = kbT * (np.eye(dim_x + dim_h) - np.matmul(expA_sol, np.matmul(np.eye(dim_x + dim_h), expA_sol.T)))
     else:
         theta0 = np.concatenate((expA.flatten(), SST.flatten(), coeffs_force.flatten()))

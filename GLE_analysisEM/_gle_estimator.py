@@ -264,6 +264,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             raise ValueError("Invalid value for 'dt': %d " "Timestep should be positive" % self.dt)
         if self.dim_h < 0:
             raise ValueError("Invalid value for 'dim_h': %d " "Estimator requires non-negative hidden dimension" % self.dim_h)
+        elif self.dim_h == 0:
+            raise ValueError("Invalid value for 'dim_h': %d " "Please use Markovian estimator" % self.dim_h)
         if self.tol < 0.0:
             raise ValueError("Invalid value for 'tol': %.5f " "Tolerance used by the EM must be non-negative" % self.tol)
         if self.max_iter < 1:
@@ -353,8 +355,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             used for the method chosen to initialize the parameters.
         """
         random_state = check_random_state(random_state)
-        if self.init_params == "random":
-            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
+        if self.init_params == "random" or self.init_params == "markov":
+            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=random_state, max_ev=(1.0 / 5) / self.dt, min_re_ev=(5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
             if self.EnforceFDT:
                 C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
@@ -441,26 +443,19 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for traj in traj_list:
             datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
 
-        if self.dim_h == 0:  # Markovian case
-            if do_init:
-                self._initialize_parameters(random_state, traj_len=_min_traj_len)
-            self._print_verbose_msg_init_beg(0)
-            self._m_step_markov(datas_visible)
-            n_init = 0  # To avoid running the loop
-            self.converged_ = True
-            best_coeffs = self.get_coefficients()
-            best_n_iter = 0
-            best_n_init = 0
-            max_lower_bound = self.loglikelihood(datas_visible, dim_h=0)
-
         self.coeffs_list_all = []
+
+        # For referencement
+        best_coeffs = None
+        best_n_iter = -1
+        best_n_init = -1
 
         for init in range(n_init):
             coeff_list_init = []
             if do_init:
+                self._initialize_parameters(random_state, traj_len=_min_traj_len)
                 if self.init_params == "markov":
                     self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
-                self._initialize_parameters(random_state, traj_len=_min_traj_len)
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
@@ -493,7 +488,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
                 if np.isnan(lower_bound):  # If we have nan value we simply restart the iteration
                     warnings.warn("Initialization %d has NaN values. Restart iteration" % (init + 1), ConvergenceWarning)
-                    init -= 1
+                    # init -= 1
                     break
 
                 self.logL[init, n_iter - 1] = lower_bound
@@ -515,8 +510,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.coeffs_list_all.append(coeff_list_init)
             if not self.converged_:
                 warnings.warn("Initialization %d did not converge. " "Try different init parameters, " "or increase max_iter, tol " "or check for degenerate data." % (init + 1), ConvergenceWarning)
-
-        self.set_coefficients(best_coeffs)
+        if best_coeffs is not None:
+            self.set_coefficients(best_coeffs)
         self.n_iter_ = best_n_iter
         self.n_best_init_ = best_n_init
         self.lower_bound_ = max_lower_bound
@@ -562,7 +557,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
         # self.sig0 = sufficient_stat["Σ_0"]
-        # A, C = self._convert_local_coefficients()
+        # A, C = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
@@ -585,7 +580,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
         # self.sig0 = sufficient_stat["Σ_0"]
-        # A, C = self._convert_local_coefficients()
+        # A, C = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
@@ -609,6 +604,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _m_step_markov(self, sufficient_stat_vis):
         """Compute coefficients estimate via Markovian approximation to provide initialization"""
+        A_full, C_full = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
         if self.model == "aboba":
             friction, force, diffusion = m_step_aboba(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         elif self.model == "euler":
@@ -617,12 +613,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             friction, force, diffusion = m_step_euler_nl(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
+        A, C = self._convert_local_coefficients(friction, diffusion)
+        A_full[: self.dim_x, : self.dim_x] = A
 
-        self.friction_coeffs[: self.dim_x, : self.dim_x] = friction
         if self.OptimizeForce:
             self.force_coeffs = force
         if self.OptimizeDiffusion:
-            self.diffusion_coeffs[: self.dim_x, : self.dim_x] = diffusion
+            C_full[: self.dim_x, : self.dim_x] = C
+        (self.friction_coeffs, self.diffusion_coeffs) = self._convert_user_coefficients(A_full, C_full)
 
     def _get_noise_prop(self, traj):
         """
@@ -657,6 +655,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if dim_h > 0 and not np.isnan(suff_datas["hS"]):
             return ll + suff_datas["hS"]
         else:
+            warnings.warn("NaN value in hidden entropy")
             return ll
 
     def score(self, X, y=None, idx_trajs=[], Xh=None):
@@ -812,20 +811,20 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         return friction, diffusion
 
-    def _convert_local_coefficients(self):
+    def _convert_local_coefficients(self, friction_coeffs, diffusion_coeffs):
         """
         Convert the estimator coefficients into the user one
         """
         if self.model == "aboba":
-            A = -scipy.linalg.logm(self.friction_coeffs) / self.dt
-            C = scipy.linalg.solve_discrete_lyapunov(self.friction_coeffs, self.diffusion_coeffs)
+            A = -scipy.linalg.logm(friction_coeffs) / self.dt
+            C = scipy.linalg.solve_discrete_lyapunov(friction_coeffs, diffusion_coeffs)
         elif self.model == "euler":
-            A = self.friction_coeffs / self.dt
-            C = scipy.linalg.solve_continuous_lyapunov(self.friction_coeffs, self.diffusion_coeffs)
+            A = friction_coeffs / self.dt
+            C = scipy.linalg.solve_continuous_lyapunov(friction_coeffs, diffusion_coeffs)
         elif self.model == "euler_noiseless":
-            A = self.friction_coeffs / self.dt
+            A = friction_coeffs / self.dt
             C = np.zeros((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-            C[self.dim_x :, self.dim_x :] = scipy.linalg.solve_continuous_lyapunov(self.friction_coeffs[self.dim_x :, self.dim_x :], self.diffusion_coeffs)
+            C[self.dim_x :, self.dim_x :] = scipy.linalg.solve_continuous_lyapunov(friction_coeffs[self.dim_x :, self.dim_x :], diffusion_coeffs)
         else:
             raise ValueError("Model {} not implemented".format(self.model))
 
@@ -833,7 +832,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def get_coefficients(self):
         """Return the actual values of the fitted coefficients."""
-        A, C = self._convert_local_coefficients()
+        A, C = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
         return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs, "dt": self.dt}
 
     def set_coefficients(self, coeffs):
