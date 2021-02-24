@@ -18,8 +18,8 @@ dim_h = 1
 random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
-
-A = np.array([[5, 1.0], [-1.0, 0.5]])
+A = np.array([[0.5, 1.0], [-1.0, 5]])
+A_save = A.copy()
 C = np.identity(dim_x + dim_h)
 # ------ Generation ------#
 pot_gen = GLE_BasisTransform(basis_type="linear")
@@ -46,8 +46,8 @@ nb_points = 25
 nb_plot = 4
 fig, axs = plt.subplots(1, nb_plot)
 inits_coeffs = copy.deepcopy(inits_coeffs_reset)
-x_coords = np.linspace(4.7, 5.2, nb_points)
-y_coords = np.linspace(0.05, 2, nb_points)
+x_coords = np.linspace(0.4, 0.6, nb_points)
+y_coords = np.linspace(1.0, 10, nb_points)
 score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
 for i, a in enumerate(x_coords):
     for j, b in enumerate(y_coords):
@@ -85,7 +85,7 @@ axs[1].set_ylabel("ll")
 
 
 inits_coeffs = copy.deepcopy(inits_coeffs_reset)
-A = np.array([[5, 1.0], [-1.0, 0.5]])
+A = A_save.copy()
 C = np.identity(dim_x + dim_h)
 x_coords = np.linspace(-25, 25, nb_points)
 y_coords = np.linspace(-25, 25, nb_points)
@@ -109,9 +109,9 @@ axs[2].set_ylabel("A[1,0]")
 # axs[2].set_xlabel("µ_0")
 # axs[2].set_ylabel("Σ_0")
 inits_coeffs = copy.deepcopy(inits_coeffs_reset)
-A = np.array([[5, 1.0], [-1.0, 0.5]])
+A = A_save.copy()
 C = np.identity(dim_x + dim_h)
-x_coords = np.linspace(0, 1.1, nb_points)
+x_coords = np.linspace(0, 10.0, nb_points)
 y_coords = np.linspace(0.05, 1.5, nb_points)
 score_val = np.empty((y_coords.shape[0], x_coords.shape[0]))
 for i, a in enumerate(x_coords):
@@ -136,31 +136,31 @@ axs[3].set_ylabel("C[1,1]")
 with open("fig_profile.pkl", "wb") as output:
     pickle.dump(fig, output)
 
-# -------------  Plotting trajs of EM -----------------
-
-fo = open("fit_trajs.pkl", "rb")
-fit_trajs = pickle.load(fo)
-
-for coeffs_list in fit_trajs:
-    len_iter = len(coeffs_list)
-
-    x = np.empty((nb_plot, len_iter))
-    y = np.empty((nb_plot, len_iter))
-    for n, step in enumerate(coeffs_list):
-        x[0, n] = step["A"][0, 0]
-        y[0, n] = step["A"][1, 1]
-        x[1, n] = step["force"][0, 0]
-        y[1, n] = step["ll"]
-        x[2, n] = step["A"][0, 1]
-        y[2, n] = step["A"][1, 0]
-        # x[2, n] = step["µ_0"][0]
-        # y[2, n] = step["Σ_0"][0, 0]
-        x[3, n] = step["A"][1, 1]
-        y[3, n] = step["C"][1, 1]
-    for i in range(nb_plot):
-        axs[i].plot(x[i, :], y[i, :], "-x", label="{}".format(n))
-
-with open("fig_profile_with_trajs.pkl", "wb") as output:
-    pickle.dump(fig, output)
+# # -------------  Plotting trajs of EM -----------------
+#
+# fo = open("fit_trajs.pkl", "rb")
+# fit_trajs = pickle.load(fo)
+#
+# for coeffs_list in fit_trajs:
+#     len_iter = len(coeffs_list)
+#
+#     x = np.empty((nb_plot, len_iter))
+#     y = np.empty((nb_plot, len_iter))
+#     for n, step in enumerate(coeffs_list):
+#         x[0, n] = step["A"][0, 0]
+#         y[0, n] = step["A"][1, 1]
+#         x[1, n] = step["force"][0, 0]
+#         y[1, n] = step["ll"]
+#         x[2, n] = step["A"][0, 1]
+#         y[2, n] = step["A"][1, 0]
+#         # x[2, n] = step["µ_0"][0]
+#         # y[2, n] = step["Σ_0"][0, 0]
+#         x[3, n] = step["A"][1, 1]
+#         y[3, n] = step["C"][1, 1]
+#     for i in range(nb_plot):
+#         axs[i].plot(x[i, :], y[i, :], "-x", label="{}".format(n))
+#
+# with open("fig_profile_with_trajs.pkl", "wb") as output:
+#     pickle.dump(fig, output)
 
 plt.show()

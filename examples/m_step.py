@@ -65,8 +65,8 @@ for n, traj in enumerate(traj_list):
     datas_visible = sufficient_stats(traj, est.dim_x)
     zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
     muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
-    muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
-    datas += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
+    # muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
+    datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
     # print(datas)
 
 print(generator.get_coefficients())
