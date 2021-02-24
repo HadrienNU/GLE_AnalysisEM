@@ -89,9 +89,7 @@ def compute_expectation_estep_aboba(traj, expA, force_coeffs, dim_x, dim_h, dt):
     """
     Pf = np.zeros((dim_x + dim_h, dim_x))
     Pf[:dim_x, :dim_x] = 0.5 * dt * np.identity(dim_x)
-    mutilde = (
-        np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))
-    ).T
+    mutilde = (np.matmul(np.identity(dim_x + dim_h)[:, :dim_x], traj[:, dim_x : 2 * dim_x].T - traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA[:, :dim_x], traj[:, 2 * dim_x : 3 * dim_x].T) + np.matmul(expA + np.identity(dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * dim_x :].T)))).T
 
     return traj[:, :dim_x], mutilde, expA[:, dim_x:]
 
@@ -212,11 +210,12 @@ def ABOBA_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=None, v0=None, expA
         v0 = np.zeros((dim_x,))
     x_traj = np.empty((nsteps, dim_x))
     p_traj = np.empty((nsteps, dim_x))
-    h_traj = np.empty((nsteps, dim_h))
+    h_traj = np.zeros((nsteps, dim_h))
     t_traj = np.reshape(np.arange(0.0, nsteps) * dt, (-1, 1))
     x_traj[0, :] = x0
     p_traj[0, :] = v0
-    h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
+    if dim_h > 0:
+        h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
     S = np.linalg.cholesky(SST)
     for n in range(1, nsteps):
         xhalf = x_traj[n - 1, :] + 0.5 * dt * p_traj[n - 1, :]

@@ -140,6 +140,7 @@ def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng(), max_e
     """Generate a random value of the A matrix"""
     # A = rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h)) / dim_x + dim_h  # Eigenvalues of A mainly into the unit circle
     # mat = max_ev * scipy.linalg.expm(0.25 * scipy.linalg.logm(A)) + min_re_ev * np.identity(dim_x + dim_h)  # map the unit circle into the quarter disk
+    # print(min_re_ev, max_ev)
     return sub_matrix_gen(dim_x=dim_x, dim_h=dim_h, rng=rng, max_ev=max_ev, min_re_ev=min_re_ev)
 
 
