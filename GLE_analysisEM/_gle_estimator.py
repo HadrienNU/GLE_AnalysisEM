@@ -356,7 +356,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         random_state = check_random_state(random_state)
         if self.init_params == "random" or self.init_params == "markov":
-            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=random_state, max_ev=(1.0 / 5) / self.dt, min_re_ev=(5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
+            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(0.5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
             if self.EnforceFDT:
                 C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
@@ -480,7 +480,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 curr_coeffs["ll"] = lower_bound
                 coeff_list_init.append(curr_coeffs)
 
-                self._m_step_num(new_stat)
+                self._m_step(new_stat)
                 if self.verbose >= 2:
                     lower_bound_m_step = self.loglikelihood(new_stat)
                     if lower_bound_m_step - lower_bound < 0:
@@ -579,7 +579,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.OptimizeForce:
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
-        # self.sig0 = sufficient_stat["Σ_0"]
+        self.sig0 = sufficient_stat["Σ_0"]
         # A, C = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
