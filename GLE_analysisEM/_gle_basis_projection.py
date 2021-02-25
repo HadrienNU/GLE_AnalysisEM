@@ -77,7 +77,7 @@ class BSplineFeatures(TransformerMixin):
 
 
 class GLE_BasisTransform(TransformerMixin, BaseEstimator):
-    """ A transformer that give values of the basis along the trajectories.
+    """A transformer that give values of the basis along the trajectories.
 
     Parameters
     ----------
@@ -182,7 +182,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
 
                 self.featuresTransformer = KBinsDiscretizer(n_bins=n_bins, encode="onehot-dense", strategy=strategy).fit(X)  # TODO use sparse array
                 self.to_combine_ = True and (not self.dim_x == 1)  # No need for combinaison if only one dimensionnal datas
-                self.nb_basis_elt_per_dim = n_bins
+                self.nb_basis_elt_ = n_bins
 
             elif self.basis_type == "bsplines":
                 n_knots = self.kwargs.get("n_knots", 5)
@@ -190,7 +190,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
                 periodic = self.kwargs.get("periodic", False)
                 self.featuresTransformer = BSplineFeatures(n_knots, degree=degree, periodic=periodic).fit(X)
                 self.to_combine_ = True and (not self.dim_x == 1)
-                self.nb_basis_elt_per_dim = self.featuresTransformer.nsplines
+                self.nb_basis_elt_ = self.featuresTransformer.nsplines
 
             elif self.basis_type == "custom":
                 raise ValueError("No transformer have been passed as argument for custom transformer")
@@ -253,7 +253,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         return combX[:, :]
 
     def transform(self, X):
-        """ A reference implementation of a transform function.
+        """A reference implementation of a transform function.
         Take the x_{1/2} as input and output basis expansion
 
         Parameters
