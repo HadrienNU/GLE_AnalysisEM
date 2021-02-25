@@ -117,11 +117,12 @@ def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=None, v0=None, A=No
         v0 = np.zeros((dim_x,))
     x_traj = np.empty((nsteps, dim_x))
     p_traj = np.empty((nsteps, dim_x))
-    h_traj = np.empty((nsteps, dim_h))
+    h_traj = np.zeros((nsteps, dim_h))
     t_traj = np.reshape(np.arange(0.0, nsteps) * dt, (-1, 1))
     x_traj[0, :] = x0
     p_traj[0, :] = v0
-    h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
+    if dim_h > 0:
+        h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
     S = np.linalg.cholesky(SST)
     for n in range(1, nsteps):
         x_traj[n, :] = x_traj[n - 1, :] + dt * p_traj[n - 1, :]
