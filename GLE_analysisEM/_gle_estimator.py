@@ -483,7 +483,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     lower_bound_m_step = self.loglikelihood(new_stat)
                     if lower_bound_m_step - lower_bound < 0:
                         print("Delta ll after M step:", lower_bound_m_step - lower_bound)
-                self.friction_coeffs = np.array([[np.nan, np.nan], [np.nan, np.nan]])
                 if np.isnan(lower_bound) or not self._check_finiteness():  # If we have nan value we simply restart the iteration
                     warnings.warn("Initialization %d has NaN values. Ends iteration" % (init), ConvergenceWarning)
                     # init -= 1
