@@ -134,7 +134,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     tol : float, defaults to 5e-4.
         The convergence threshold. EM iterations will stop when the lower bound average gain is below this threshold.
 
-    max_iter: int, default=50
+    max_iter: int, default=100
         The maximum number of EM iterations
 
     OptimizeForce: bool, default=True
@@ -194,7 +194,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         dim_x=1,
         dim_h=1,
         tol=5e-4,
-        max_iter=50,
+        max_iter=100,
         OptimizeForce=True,
         OptimizeDiffusion=True,
         EnforceFDT=False,
@@ -483,9 +483,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     lower_bound_m_step = self.loglikelihood(new_stat)
                     if lower_bound_m_step - lower_bound < 0:
                         print("Delta ll after M step:", lower_bound_m_step - lower_bound)
-
-                if np.isnan(lower_bound):  # If we have nan value we simply restart the iteration
-                    warnings.warn("Initialization %d has NaN values. Restart iteration" % (init + 1), ConvergenceWarning)
+                self.friction_coeffs = np.array([[np.nan, np.nan], [np.nan, np.nan]])
+                if np.isnan(lower_bound) or not self._check_finiteness():  # If we have nan value we simply restart the iteration
+                    warnings.warn("Initialization %d has NaN values. Ends iteration" % (init), ConvergenceWarning)
                     # init -= 1
                     break
 
@@ -596,6 +596,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
         # #     self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
         # #     self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
+
+    def _check_finiteness(self):
+        """
+        Check that all quantities are finite
+        """
+        return np.isfinite(np.sum(self.friction_coeffs)) and np.isfinite(np.sum(self.diffusion_coeffs)) and np.isfinite(np.sum(self.force_coeffs)) and np.isfinite(np.sum(self.mu0)) and self.isfinite(np.sum(self.sig0))
 
     def _enforce_degeneracy(self):
         """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients"""
@@ -813,6 +819,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Convert the estimator coefficients into the user one
         """
+        if not np.isfinite(np.sum(friction_coeffs)) or not np.isfinite(np.sum(diffusion_coeffs)):  # Check for NaN value
+            warnings.warn("NaN of infinite value in friction or diffusion coefficients.")
+            return friction_coeffs, diffusion_coeffs
         if self.model == "aboba":
             A = -scipy.linalg.logm(friction_coeffs) / self.dt
             C = scipy.linalg.solve_discrete_lyapunov(friction_coeffs, diffusion_coeffs)
