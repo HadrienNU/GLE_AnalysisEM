@@ -11,7 +11,7 @@ from sklearn.utils import check_array
 
 
 class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
-    """ A transformer that use potential estimation to compute value of the force along the trajectories.
+    """A transformer that use potential estimation to compute value of the force along the trajectories.
     For histogram input of dimension 1 or 2 are fitted to B-splines and evaluated from there.
     Higher dimension simply use the value of the histogram closest to the point of evaluation.
     Parameters
@@ -53,8 +53,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         self.bandwidth = bandwidth
 
     def _check_parameters(self):
-        """Check the inputed parameter for the basis type
-        """
+        """Check the inputed parameter for the basis type"""
         self.estimator = self.estimator.casefold()
         if self.estimator not in ["histogram", "kde"]:
             raise ValueError("The estimator {} is not implemented.".format(self.estimator))
@@ -91,6 +90,8 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
         elif self.model in ["euler", "euler_noiseless"]:
             x_pos = X[:, 1 : 1 + self.dim_x]
+        self.min_vals = np.amin(x_pos, axis=0)
+        self.max_vals = np.amax(x_pos, axis=0)
         if self.estimator == "histogram":
             if self.dim_x == 1:
                 fehist = np.histogram(x_pos, bins=self.bins)
@@ -116,7 +117,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
-        """ Compute the force from derivative of fitted potential at given points
+        """Compute the force from derivative of fitted potential at given points
 
         Parameters
         ----------
@@ -201,16 +202,14 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             return -self.kde_.score_samples(x_pos).reshape(-1, 1)
 
     def digitize(self, X):
-        """ Find location of a given points inside the bins of the histogram
-        """
+        """Find location of a given points inside the bins of the histogram"""
         out_indx = np.empty((X.shape[0]))
         for i in range(self.dim_x):
             out_indx[i] = np.digitize(X[:, i], self.edges_hist_[i])
         return out_indx
 
     def differentiateKernel(self, X):
-        """Numerical differentiation in N-D
-        """
+        """Numerical differentiation in N-D"""
         grad = np.empty_like(X)
         for n in range(self.dim_x):
             eps = np.zeros_like(X)

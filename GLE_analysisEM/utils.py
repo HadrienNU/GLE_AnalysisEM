@@ -83,7 +83,7 @@ def loadDatas_pos(paths, dim_x):
     idx_trajs = []
     for chemin in paths:
         trj = np.loadtxt(chemin)
-        tps = np.asarray(trj[:, :1])
+        tps = np.asarray(trj[:, :1] - trj[0, 0])  # Set origin of time to zero
         pos = np.asarray(trj[:, 1 : 1 + dim_x])
         velocity = np.gradient(pos, tps[:, 0], axis=0)
         txv = np.hstack((tps, pos, velocity))
