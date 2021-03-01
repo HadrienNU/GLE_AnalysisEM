@@ -600,7 +600,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Check that all quantities are finite
         """
-        return np.isfinite(np.sum(self.friction_coeffs)) and np.isfinite(np.sum(self.diffusion_coeffs)) and np.isfinite(np.sum(self.force_coeffs)) and np.isfinite(np.sum(self.mu0)) and self.isfinite(np.sum(self.sig0))
+        return np.isfinite(np.sum(self.friction_coeffs)) and np.isfinite(np.sum(self.diffusion_coeffs)) and np.isfinite(np.sum(self.force_coeffs)) and np.isfinite(np.sum(self.mu0)) and np.isfinite(np.sum(self.sig0))
 
     def _enforce_degeneracy(self):
         """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients"""
