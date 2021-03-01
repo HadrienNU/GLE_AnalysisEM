@@ -10,7 +10,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 
-# from GLE_analysisEM import Markov_Estimator
+from GLE_analysisEM import Markov_Estimator
 from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
 
 from sklearn.preprocessing import FunctionTransformer
@@ -28,28 +28,30 @@ def dV(X):
 
 dim_x = 1
 dim_h = 1
-random_state = 42
+random_state = None
 model = "aboba"
 force = -np.identity(dim_x)
 # force = [[-0.25, -1], [1, -0.25]]
 A = np.array([[5e-8, -1.0], [1.0, 0.1]])
 
 # ------ Generation ------#
-pot_gen = GLE_BasisTransform(basis_type="linear")
-# pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
+# pot_gen = GLE_BasisTransform(basis_type="linear")
+pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, A_init=A, EnforceFDT=True, force_init=force, init_params="user", model=model, random_state=random_state)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, A_init=A, EnforceFDT=True, force_init=force, init_params="random", model=model, random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
 
 
 # ------ Estimation ------#
-basis = GLE_BasisTransform(basis_type="linear")
-# basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
+# basis = GLE_BasisTransform(basis_type="linear")
+basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=10, EnforceFDT=True, OptimizeForce=True, random_state=None, tol=1e-5, no_stop=False)
+estimator = GLE_Estimator(verbose=2, verbose_interval=1, dim_x=dim_x, dim_h=dim_h, model=model, n_init=5, EnforceFDT=True, OptimizeForce=True, random_state=None, tol=1e-5, no_stop=False)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
+print("---- Real ones ----")
+print(generator.get_coefficients())
 
 # ------ Plotting ------#
 fig, axs = plt.subplots(2, 2)
@@ -74,23 +76,38 @@ if dim_x == 2:
 
 axs[0, 0].legend(loc="upper right")
 
-# ------ Memory kernel ------#
-axs[0, 1].set_title("Memory kernel")
-time, kernel = memory_kernel(1000, estimator.dt, estimator.get_coefficients(), dim_x)
-time_true, kernel_true = memory_kernel(1000, generator.dt, generator.get_coefficients(), dim_x)
+# # ------ Memory kernel ------#
+# axs[0, 1].set_title("Memory kernel")
+# time, kernel = memory_kernel(1000, estimator.dt, estimator.get_coefficients(), dim_x)
+# time_true, kernel_true = memory_kernel(1000, generator.dt, generator.get_coefficients(), dim_x)
+#
+#
+# axs[0, 1].plot(time, kernel[:, 0, 0], label="Fitted memory kernel")
+# axs[0, 1].plot(time_true, kernel_true[:, 0, 0], label="True memory kernel")
+# axs[0, 1].legend(loc="upper right")
+#
+# # ------ Memory eigenvalues ------#
+# axs[1, 1].set_title("Kernel Eigenvalues")
+# mem_ev = memory_timescales(estimator.get_coefficients(), dim_x=dim_x)
+# mem_ev_true = memory_timescales(generator.get_coefficients(), dim_x=dim_x)
+# axs[1, 1].scatter(np.real(mem_ev), np.imag(mem_ev), label="Ev fitted")
+# axs[1, 1].scatter(np.real(mem_ev_true), np.imag(mem_ev_true), label="Ev true")
+# # axs[1, 1].set_aspect(1)
 
 
-axs[0, 1].plot(time, kernel[:, 0, 0], label="Fitted memory kernel")
-axs[0, 1].plot(time_true, kernel_true[:, 0, 0], label="True memory kernel")
-axs[0, 1].legend(loc="upper right")
-
-# ------ Memory eigenvalues ------#
-axs[1, 1].set_title("Kernel Eigenvalues")
-mem_ev = memory_timescales(estimator.get_coefficients(), dim_x=dim_x)
-mem_ev_true = memory_timescales(generator.get_coefficients(), dim_x=dim_x)
-axs[1, 1].scatter(np.real(mem_ev), np.imag(mem_ev), label="Ev fitted")
-axs[1, 1].scatter(np.real(mem_ev_true), np.imag(mem_ev_true), label="Ev true")
-# axs[1, 1].set_aspect(1)
+def simulated_vacf(estimator, basis):
+    """
+    Get vacf via numericall simulation of the model
+    """
+    Ntrajs = 50
+    X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs, basis=basis)
+    traj_list = np.split(X, idx)
+    vacf = 0.0
+    for n, trj in enumerate(traj_list):
+        vacf += correlation(trj[:, 1 + estimator.dim_x])
+        time = trj[:, 0]
+    vacf /= Ntrajs
+    return time, vacf
 
 
 # ------ Diffusion ------#
@@ -100,9 +117,12 @@ for n, trj in enumerate(traj_list):
     vacf_num += correlation(trj[:, 2])
     time = trj[:, 0]
 vacf_num /= len(traj_list)
-
+time_sim, vacf_sim = simulated_vacf(estimator, basis)
+axs[1, 0].plot(time[: len(time_sim) // 2], vacf_sim, label="Fitted VACF")
 axs[1, 0].set_title("Velocity autocorrelation function")
 axs[1, 0].plot(time[: len(time) // 2], vacf_num, label="Numerical VACF")
+
+
 axs[1, 0].legend(loc="upper right")
 
 plt.show()

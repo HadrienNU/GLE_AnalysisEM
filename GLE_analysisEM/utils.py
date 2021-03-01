@@ -151,7 +151,7 @@ def sub_matrix_gen(dim_x=1, dim_h=1, rng=np.random.default_rng(), max_ev=1.0, mi
     A = np.zeros((dim_x + dim_h, dim_x + dim_h))
     Ahh = random_clever_gen(dim_x=0, dim_h=dim_h, rng=rng, max_ev=max_ev, min_re_ev=min_re_ev)
     A[dim_x:, dim_x:] = Ahh
-    A[:dim_x, :dim_x] = random_clever_gen(dim_x=dim_x, dim_h=0, rng=rng, max_ev=max_ev * 1e-4, min_re_ev=min_re_ev * 1e-4)
+    A[:dim_x, :dim_x] = random_clever_gen(dim_x=dim_x, dim_h=0, rng=rng, max_ev=max_ev * 1e-2, min_re_ev=min_re_ev * 1e-2)
     min_dim = min(dim_x, dim_h)
     A[dim_x : dim_x + min_dim, :min_dim] = -np.eye(min_dim)
     A[:min_dim, dim_x : dim_x + min_dim] = np.eye(min_dim)

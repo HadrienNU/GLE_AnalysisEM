@@ -98,8 +98,8 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
 
     detd = np.linalg.det(Sigh[:-1, :, :])
     dets = np.linalg.det(Sigh[:-1, dim_h:, dim_h:])
-    hSdouble = 0.5 * np.log(detd[detd > 1e-12]).mean()
-    hSsimple = 0.5 * np.log(dets[dets > 1e-12]).mean()
+    hSdouble = 0.5 * np.log(detd[detd > 0.0]).mean()
+    hSsimple = 0.5 * np.log(dets[dets > 0.0]).mean()
     # TODO take care of initial value that is missing
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple})
 

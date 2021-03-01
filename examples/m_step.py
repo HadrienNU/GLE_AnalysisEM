@@ -10,6 +10,7 @@ import pandas as pd
 
 # from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
+from sklearn.preprocessing import FunctionTransformer
 
 # from GLE_analysisEM.utils import loadTestDatas_est
 
@@ -25,7 +26,17 @@ pd.set_option("display.max_colwidth", -1)
 # model = "aboba"
 # force = -np.identity(dim_x)
 #
-basis = GLE_BasisTransform(basis_type="linear")
+a = 0.025
+b = 1.0
+
+
+def dV(X):
+    """
+    Compute the force field
+    """
+    return -4 * a * np.power(X, 3) + 2 * b * X
+
+
 # generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="random", model=model, random_state=42)
 # X, idx, Xh = generator.sample(n_samples=1000, n_trajs=500, x0=0.0, v0=0.0, basis=basis)
 
@@ -35,16 +46,19 @@ random_state = 42
 model = "aboba"
 force = -np.identity(dim_x)
 
-A = np.array([[5, 1.0], [-1.0, 0.5]])
+A = np.array([[5e-5, 1.0], [-1.0, 0.5]])
 C = np.identity(dim_x + dim_h)
 # ------ Generation ------#
-pot_gen = GLE_BasisTransform(basis_type="linear")
+# pot_gen = GLE_BasisTransform(basis_type="linear")
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
+pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="user", A_init=A, C_init=C, model=model, random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=10000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
 
 # X, idx, Xh = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat", "../GLE_analysisEM/tests/1_trajectories.dat"], 1, 1)
 # est = GLE_Estimator(init_params="random", EnforceFDT=False, OptimizeDiffusion=True, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), force_init=np.array([-1]), dim_x=dim_x, dim_h=dim_h, model=model)
+# basis = GLE_BasisTransform(basis_type="linear")
+basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
 
 est = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=True, OptimizeDiffusion=True)
