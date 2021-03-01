@@ -11,6 +11,18 @@ class AbstractModel:
     def expected_features(self):
         return 1 + 2 * self.dim_x
 
+    def _convert_user_coefficients(self, A, C, dt):
+        """
+        Convert the user provided coefficients into the local one
+        """
+        raise NotImplementedError
+
+    def _convert_local_coefficients(self, friction_coeffs, diffusion_coeffs, dt):
+        """
+        Convert the estimator coefficients into the user one
+        """
+        raise NotImplementedError
+
     def preprocessingTraj(self, X, idx_trajs=[]):
         raise NotImplementedError
 
@@ -51,8 +63,9 @@ class AbstractModel:
             h_traj[0, :] = rng.multivariate_normal(muh0, sigh0)
         S = np.linalg.cholesky(SST)
         for n in range(1, nsteps):
-            x_traj[n, :], p_traj[n, :], h_traj[n, :] = self.generator_one_step(x_traj[n - 1, :], p_traj[n - 1, :], h_traj[n - 1, :], dt, friction, S)
+            gauss = np.matmul(S, rng.standard_normal(size=self.dim_x + dim_h))
+            x_traj[n, :], p_traj[n, :], h_traj[n, :] = self.generator_one_step(x_traj[n - 1, :], p_traj[n - 1, :], h_traj[n - 1, :], dt, friction, force_coeffs, basis, gauss)
         return np.hstack((t_traj, x_traj, p_traj)), h_traj
 
-    def generator_one_step(x_t, p_t, h_t, dt, friction, S):
+    def generator_one_step(x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
         raise NotImplementedError

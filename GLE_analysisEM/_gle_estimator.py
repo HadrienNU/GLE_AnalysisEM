@@ -3,7 +3,6 @@ This the main estimator module
 """
 import numpy as np
 import pandas as pd
-import scipy.linalg
 
 import warnings
 from time import time
@@ -222,7 +221,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.OptimizeDiffusion = OptimizeDiffusion
         self.EnforceFDT = EnforceFDT
 
-        self.model = model
+        self.modelname = model
 
         self.A_init = A_init
         self.C_init = C_init
@@ -272,11 +271,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.max_iter < 1:
             raise ValueError("Invalid value for 'max_iter': %d " "Estimation requires at least one iteration" % self.max_iter)
 
-        self.model = self.model.casefold()
+        self.modelname = self.modelname.casefold()
 
-        if self.model not in model_class.keys():
+        if self.modelname not in model_class.keys():
             raise ValueError("Model {} not implemented".format(self.model))
-        self.model = model_class[self.model](self.dim_x)
+        self.model = model_class[self.modelname](self.dim_x)
         if self.EnforceFDT and not self.OptimizeDiffusion:
             self.OptimizeDiffusion = True
             warnings.warn("As enforcement of FDT was asked, the diffusion coefficients will be optimized too.")
@@ -303,7 +302,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if self.EnforceFDT:
                 self.C_init = np.trace(self.C_init) * np.identity(self.dim_x + self.dim_h) / (self.dim_x + self.dim_h)
 
-            expA, SST = self._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init))
+            expA, SST = self.model._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
 
@@ -342,9 +341,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         #     expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
         # elif self.model in ["overdamped", "euler", "euler_noiseless"]:
         #     expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
-        self.dim_coeffs_force = n_features - model_module[self.model].expected_features(self.dim_x)
+        self.dim_coeffs_force = n_features - self.model.expected_features()
         if self.dim_coeffs_force <= 0:
-            raise ValueError("X has {} features, but {} is expecting at least {} features as input. Did you forget to add basis features?".format(n_features, self.__class__.__name__, model_module[self.model].expected_features(self.dim_x) + 1))
+            raise ValueError("X has {} features, but {} is expecting at least {} features as input. Did you forget to add basis features?".format(n_features, self.__class__.__name__, self.model.expected_features() + 1))
 
     def _initialize_parameters(self, random_state, traj_len=50):
         """Initialize the model parameters.
@@ -368,15 +367,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     C = np.identity(self.dim_x + self.dim_h)
                 else:
                     C = np.asarray(self.C_init)
-            (self.friction_coeffs, self.diffusion_coeffs) = self._convert_user_coefficients(A, C)
+            (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(A, C, self.dt)
         elif self.init_params == "user":
-            (self.friction_coeffs, self.diffusion_coeffs) = self._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init))
+            (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
 
         if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
-            _, self.diffusion_coeffs = self._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init))
+            _, self.diffusion_coeffs = self.model._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
 
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
@@ -561,7 +560,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
         # self.sig0 = sufficient_stat["Σ_0"]
-        # A, C = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
+        # A, C = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs,self.dt)
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
@@ -585,7 +584,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
         self.sig0 = sufficient_stat["Σ_0"]
-        # A, C = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
+        # A, C = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs,self.dt)
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
@@ -615,7 +614,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _m_step_markov(self, sufficient_stat_vis):
         """Compute coefficients estimate via Markovian approximation to provide initialization"""
-        A_full, C_full = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
+        A_full, C_full = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
         friction, force, diffusion = self.model.m_step(sufficient_stat_vis, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         # if self.model == "aboba":
         #     friction, force, diffusion = m_step_aboba(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
@@ -625,14 +624,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         #     friction, force, diffusion = m_step_euler_nl(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         # else:
         #     raise ValueError("Model {} not implemented".format(self.model))
-        A, C = self._convert_local_coefficients(friction, diffusion)
+        A, C = self.model._convert_local_coefficients(friction, diffusion, self.dt)
         A_full[: self.dim_x, : self.dim_x] = A
 
         if self.OptimizeForce:
             self.force_coeffs = force
         if self.OptimizeDiffusion:
             C_full[: self.dim_x, : self.dim_x] = C
-        (self.friction_coeffs, self.diffusion_coeffs) = self._convert_user_coefficients(A_full, C_full)
+        (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(A_full, C_full, self.dt)
 
     def _get_noise_prop(self, traj):
         """
@@ -809,49 +808,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 X_h = np.vstack((X_h, h))
         return X, idx_trajs, X_h
 
-    def _convert_user_coefficients(self, A, C):
-        """
-        Convert the user provided coefficients into the local one
-        """
-        if self.model == "aboba":
-            friction = scipy.linalg.expm(-1 * self.dt * A)
-            diffusion = C - np.matmul(friction, np.matmul(C, friction.T))
-        elif self.model == "euler":
-            friction = A * self.dt
-            diffusion = np.matmul(friction, C) + np.matmul(C, friction.T)
-        elif self.model == "euler_noiseless":
-            friction = A * self.dt
-            diffusion = (np.matmul(friction, C) + np.matmul(C, friction.T))[self.dim_x :, self.dim_x :]
-        else:
-            raise ValueError("Model {} not implemented".format(self.model))
-
-        return friction, diffusion
-
-    def _convert_local_coefficients(self, friction_coeffs, diffusion_coeffs):
-        """
-        Convert the estimator coefficients into the user one
-        """
-        if not np.isfinite(np.sum(friction_coeffs)) or not np.isfinite(np.sum(diffusion_coeffs)):  # Check for NaN value
-            warnings.warn("NaN of infinite value in friction or diffusion coefficients.")
-            return friction_coeffs, diffusion_coeffs
-        if self.model == "aboba":
-            A = -scipy.linalg.logm(friction_coeffs) / self.dt
-            C = scipy.linalg.solve_discrete_lyapunov(friction_coeffs, diffusion_coeffs)
-        elif self.model == "euler":
-            A = friction_coeffs / self.dt
-            C = scipy.linalg.solve_continuous_lyapunov(friction_coeffs, diffusion_coeffs)
-        elif self.model == "euler_noiseless":
-            A = friction_coeffs / self.dt
-            C = np.zeros((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-            C[self.dim_x :, self.dim_x :] = scipy.linalg.solve_continuous_lyapunov(friction_coeffs[self.dim_x :, self.dim_x :], diffusion_coeffs)
-        else:
-            raise ValueError("Model {} not implemented".format(self.model))
-
-        return A, C
-
     def get_coefficients(self):
         """Return the actual values of the fitted coefficients."""
-        A, C = self._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs)
+        A, C = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
         return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs, "dt": self.dt}
 
     def set_coefficients(self, coeffs):
@@ -862,7 +821,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         coeffs : dict
             Contains the value of the coefficients to set.
         """
-        (self.friction_coeffs, self.diffusion_coeffs) = self._convert_user_coefficients(np.asarray(coeffs["A"]), np.asarray(coeffs["C"]))
+        (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(np.asarray(coeffs["A"]), np.asarray(coeffs["C"]), self.dt)
         (self.force_coeffs, self.mu0, self.sig0) = (coeffs["force"], coeffs["µ_0"], coeffs["Σ_0"])
 
     def _n_parameters(self):

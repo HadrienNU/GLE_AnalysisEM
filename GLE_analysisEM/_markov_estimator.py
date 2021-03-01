@@ -4,7 +4,7 @@ This the main estimator module
 import numpy as np
 from sklearn.utils import check_random_state, check_array
 
-from ._gle_estimator import GLE_Estimator, sufficient_stats, preprocessingTraj
+from ._gle_estimator import GLE_Estimator, sufficient_stats
 
 
 class Markov_Estimator(GLE_Estimator):
@@ -99,7 +99,7 @@ class Markov_Estimator(GLE_Estimator):
 
         self._check_n_features(X)
 
-        Xproc, idx_trajs = preprocessingTraj(X, idx_trajs=idx_trajs, dim_x=self.dim_x, model=self.model)
+        Xproc, idx_trajs = self.model.preprocessingTraj(X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         _min_traj_len = np.min([trj.shape[0] for trj in traj_list])
         # print(traj_list)
