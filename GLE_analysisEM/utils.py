@@ -42,7 +42,7 @@ def loadTestDatas_est(paths, dim_x, dim_h):
     return X, idx_trajs, X_h
 
 
-def loadDatas_est(paths, dim_x):
+def loadDatas_est(paths, dim_x, maxlenght=None):
     """Loads some test trajectories
 
     Parameters
@@ -58,7 +58,10 @@ def loadDatas_est(paths, dim_x):
 
     for chemin in paths:
         trj = np.loadtxt(chemin)
-        txv = np.asarray(trj[:, : 1 + 2 * dim_x])
+        if maxlenght is None:
+            txv = np.asarray(trj[:, : 1 + 2 * dim_x])
+        else:
+            txv = np.asarray(trj[:maxlenght, : 1 + 2 * dim_x])
         if X is None:
             X = txv
         else:
@@ -68,7 +71,7 @@ def loadDatas_est(paths, dim_x):
     return X, idx_trajs
 
 
-def loadDatas_pos(paths, dim_x):
+def loadDatas_pos(paths, dim_x, maxlenght=None):
     """Loads some test trajectories
 
     Parameters
@@ -83,8 +86,12 @@ def loadDatas_pos(paths, dim_x):
     idx_trajs = []
     for chemin in paths:
         trj = np.loadtxt(chemin)
-        tps = np.asarray(trj[:, :1] - trj[0, 0])  # Set origin of time to zero
-        pos = np.asarray(trj[:, 1 : 1 + dim_x])
+        if maxlenght is None:
+            tps = np.asarray(trj[:, :1] - trj[0, 0])  # Set origin of time to zero
+            pos = np.asarray(trj[:, 1 : 1 + dim_x])
+        else:
+            tps = np.asarray(trj[:maxlenght, :1] - trj[0, 0])  # Set origin of time to zero
+            pos = np.asarray(trj[:maxlenght, 1 : 1 + dim_x])
         velocity = np.gradient(pos, tps[:, 0], axis=0)
         txv = np.hstack((tps, pos, velocity))
         if X is None:

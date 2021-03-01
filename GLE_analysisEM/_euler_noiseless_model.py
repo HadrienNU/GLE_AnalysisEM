@@ -4,29 +4,8 @@ This the main estimator module
 import numpy as np
 
 
-def preprocessingTraj_euler_nl(X, idx_trajs=[], dim_x=1):
-    """
-    From position and velocity array compute everything that is needed for the following computation
-    """
-    dt = X[1, 0] - X[0, 0]
-
-    v = (np.roll(X[:, 1 : 1 + dim_x], -1, axis=0) - X[:, 1 : 1 + dim_x]) / dt
-    bk = X[:, 1 + 2 * dim_x :]
-    v_plus = np.roll(v, -1, axis=0)
-    Xtraj = np.hstack((v_plus, v, v, bk))
-
-    # Remove the last element of each trajectory
-    traj_list = np.split(Xtraj, idx_trajs)
-    Xtraj_new = None
-    idx_new = []
-    for trj in traj_list:
-        if Xtraj_new is None:
-            Xtraj_new = trj[:-1, :]
-        else:
-            idx_new.append(len(Xtraj_new))
-            Xtraj_new = np.vstack((Xtraj_new, trj[:-1, :]))
-
-    return Xtraj_new, idx_new
+def expected_features(dim_x):
+    return 1 + 2 * dim_x
 
 
 def compute_expectation_estep_euler_nl(traj, A, force_coeffs, dim_x, dim_h, dt):
@@ -101,7 +80,7 @@ def loglikelihood_euler_nl(suff_datas, A, SST, coeffs_force, dim_x, dim_h, dt):
     return quad_part - 0.5 * logdet
 
 
-def euler_generator_nl(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, A=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
+def euler_generator_nl(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, friction=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
     """
     Integrate the equation of nsteps steps
     """
@@ -122,6 +101,6 @@ def euler_generator_nl(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=0.0, v0=0.0, A=N
         force_t = dt * np.matmul(force_coeffs, basis.predict(np.reshape(x_traj[n - 1, :], (1, -1)))[0])
         # gaussh = rng.multivariate_normal(np.zeros((dim_h,)), SST)
         gaussh = np.matmul(S, rng.standard_normal(size=dim_h))
-        h_traj[n, :] = h_traj[n - 1, :] - np.matmul(A[dim_x:, :dim_x], p_traj[n - 1, :]) - np.matmul(A[dim_x:, dim_x:], h_traj[n - 1, :]) + gaussh
-        p_traj[n, :] = p_traj[n - 1, :] - np.matmul(A[:dim_x, :dim_x], p_traj[n - 1, :]) - np.matmul(A[:dim_x, dim_x:], h_traj[n - 1, :]) + force_t
+        h_traj[n, :] = h_traj[n - 1, :] - np.matmul(friction[dim_x:, :dim_x], p_traj[n - 1, :]) - np.matmul(friction[dim_x:, dim_x:], h_traj[n - 1, :]) + gaussh
+        p_traj[n, :] = p_traj[n - 1, :] - np.matmul(friction[:dim_x, :dim_x], p_traj[n - 1, :]) - np.matmul(friction[:dim_x, dim_x:], h_traj[n - 1, :]) + force_t
     return np.hstack((t_traj, x_traj, p_traj)), h_traj

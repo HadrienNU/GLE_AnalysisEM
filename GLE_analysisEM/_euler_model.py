@@ -4,6 +4,10 @@ This the main estimator module
 import numpy as np
 
 
+def expected_features(dim_x):
+    return 1 + 2 * dim_x
+
+
 def preprocessingTraj_euler(X, idx_trajs=[], dim_x=1):
     """
     From position and velocity array compute everything that is needed for the following computation
@@ -107,7 +111,7 @@ def loglikelihood_euler(suff_datas, A, SST, coeffs_force, dim_x, dim_h, dt):
     return quad_part - 0.5 * logdet
 
 
-def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=None, v0=None, A=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
+def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=None, v0=None, friction=None, SST=None, force_coeffs=None, muh0=0.0, sigh0=0.0, basis=None, rng=np.random.default_rng()):
     """
     Integrate the equation of nsteps steps
     """
@@ -129,6 +133,6 @@ def euler_generator(nsteps=50, dt=5e-3, dim_x=1, dim_h=1, x0=None, v0=None, A=No
         force_t = dt * np.matmul(force_coeffs, basis.predict(np.reshape(x_traj[n - 1, :], (1, -1)))[0])
         # gaussp, gaussh = np.split(rng.multivariate_normal(np.zeros((dim_x + dim_h,)), SST), [dim_x])
         gauss = np.matmul(S, rng.standard_normal(size=dim_x + dim_h))
-        h_traj[n, :] = h_traj[n - 1, :] - np.matmul(A[dim_x:, :dim_x], p_traj[n - 1, :]) - np.matmul(A[dim_x:, dim_x:], h_traj[n - 1, :]) + gauss[dim_x:]
-        p_traj[n, :] = p_traj[n - 1, :] - np.matmul(A[:dim_x, :dim_x], p_traj[n - 1, :]) - np.matmul(A[:dim_x, dim_x:], h_traj[n - 1, :]) + force_t + gauss[:dim_x]
+        h_traj[n, :] = h_traj[n - 1, :] - np.matmul(friction[dim_x:, :dim_x], p_traj[n - 1, :]) - np.matmul(friction[dim_x:, dim_x:], h_traj[n - 1, :]) + gauss[dim_x:]
+        p_traj[n, :] = p_traj[n - 1, :] - np.matmul(friction[:dim_x, :dim_x], p_traj[n - 1, :]) - np.matmul(friction[:dim_x, dim_x:], h_traj[n - 1, :]) + force_t + gauss[:dim_x]
     return np.hstack((t_traj, x_traj, p_traj)), h_traj
