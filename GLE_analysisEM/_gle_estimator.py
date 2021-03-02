@@ -14,11 +14,8 @@ from sklearn.exceptions import ConvergenceWarning
 
 from .utils import generateRandomDefPosMat, correlation
 from ._aboba_model import ABOBAModel
-from ._euler_model import EulerModel, EulerNLModel
+from ._euler_model import EulerModel, EulerNLModel, EulerFixMarkovModel
 
-# from ._aboba_model import preprocessingTraj_aboba, compute_expectation_estep_aboba, loglikelihood_aboba, ABOBA_generator, m_step_aboba, m_step_num_aboba
-# from ._euler_model import preprocessingTraj_euler, compute_expectation_estep_euler, loglikelihood_euler, euler_generator, m_step_euler
-# from ._euler_noiseless_model import compute_expectation_estep_euler_nl, loglikelihood_euler_nl, euler_generator_nl, m_step_euler_nl
 from ._gle_basis_projection import GLE_BasisTransform
 
 # In case the fortran module is not available, there is the python fallback
@@ -29,7 +26,7 @@ except ImportError as err:
     warnings.warn("Python fallback will been used for filtersmoother module.")
     from .utils import filtersmoother
 
-model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel}
+model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel}
 
 
 def sufficient_stats(traj, dim_x):
@@ -108,19 +105,6 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple})
 
 
-# def preprocessingTraj(X, idx_trajs, dim_x, model="aboba"):
-#     """Model are assumed to be under the form of
-#     U_{t+1}(X_{t+1})-V_t(X_t) - friction*W_t(X_t) - force*bk(X_t) where friction and force are dependent of the fitted coefficients
-#     This functionr return a data array under the form (U_{t+1}(X_{t+1}),V_t(X_t) ,W_t(X_t),bk(X_t))
-#     """
-#     if model == "aboba":
-#         return preprocessingTraj_aboba(X, idx_trajs=idx_trajs, dim_x=dim_x)
-#     elif model == "euler" or model == "euler":
-#         return preprocessingTraj_euler(X, idx_trajs=idx_trajs, dim_x=dim_x)
-#     else:
-#         raise ValueError("Model {} not implemented".format(model))
-
-
 class GLE_Estimator(DensityMixin, BaseEstimator):
     """A GLE estimator based on Expectation-Maximation algorithm.
         We consider that the free energy have been estimated before and constant values of friction and diffusion coefficients are fitted
@@ -154,6 +138,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Must be one of::
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
+
+    model : {}, default to 'euler'.
+        Model to be fitted
 
     A_init, C_init, force_init, mu_init, sig_init: array, optional
         The user-provided initial coefficients, defaults to None.
@@ -201,7 +188,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         OptimizeDiffusion=True,
         EnforceFDT=False,
         init_params="random",
-        model="aboba",
+        model="euler",
         A_init=None,
         C_init=None,
         force_init=None,
@@ -569,7 +556,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """M step.
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
         """
-        friction, force, diffusion = self.model.m_step(sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        friction, force, diffusion = self.model.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         # if self.model == "aboba":
         #     friction, force, diffusion = m_step_aboba(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         # elif self.model == "euler":

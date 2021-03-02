@@ -61,7 +61,7 @@ class EulerModel(AbstractModel):
         mutilde += np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T).T  # mutilde is X_t+f(X_t) - A*X_t
         return traj[:, : self.dim_x], mutilde, np.identity(self.dim_x + dim_h)[:, self.dim_x :] - A[:, self.dim_x :]
 
-    def m_step(self, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+    def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
         """M step.
         TODO:   -Select dimension of fitted parameters from the sufficient stats
         """
@@ -73,6 +73,7 @@ class EulerModel(AbstractModel):
 
             force_coeffs = (np.matmul(sufficient_stat["bkdx"].T, invbkbk) / dt - np.matmul(A, np.matmul(sufficient_stat["bkx"].T, invbkbk)) / dt)[: self.dim_x, :]
         else:
+            force_coeffs = coeffs_force_old
             Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
             Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
             YX = sufficient_stat["xdx"].T - np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
@@ -168,7 +169,7 @@ class EulerNLModel(EulerModel):
         mutilde += np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T).T  # mutilde is X_t+f(X_t) - A*X_t
         return traj[:, :0], mutilde[self.dim_x :], np.identity(dim_h) - A[self.dim_x :, self.dim_x :]
 
-    def m_step(self, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+    def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
         """M step.
         TODO:   -Select dimension of fitted parameters from the sufficient stats
         """
@@ -181,6 +182,7 @@ class EulerNLModel(EulerModel):
 
             force_coeffs = (np.matmul(sufficient_stat["bkdx"].T, invbkbk) / dt - np.matmul(A, np.matmul(sufficient_stat["bkx"].T, invbkbk)) / dt)[: self.dim_x, :]
         else:
+            force_coeffs = coeffs_force_old
             Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
             Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
             YX = sufficient_stat["xdx"].T - np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
@@ -240,3 +242,56 @@ class EulerNLModel(EulerModel):
         h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]
         p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t
         return x_tp, p_tp, h_tp
+
+
+class EulerFixMarkovModel(EulerModel):
+    def m_step(self, A_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+        """M step.
+        TODO:   -Select dimension of fitted parameters from the sufficient stats
+        """
+        # OptimizeForce is supposed to be False
+        A_cons = np.zeros((self.dim_x + dim_h, self.dim_x + dim_h))
+        A_cons[: self.dim_x, : self.dim_x] = A_old[: self.dim_x, : self.dim_x]
+        min_dim = min(self.dim_x, dim_h)
+        A_cons[self.dim_x : self.dim_x + min_dim, :min_dim] = -dt * np.eye(min_dim)
+        A_cons[:min_dim, self.dim_x : self.dim_x + min_dim] = dt * np.eye(min_dim)
+
+        A_free_vect = np.zeros((self.dim_x + dim_h, self.dim_x + dim_h))
+        A_free_vect[self.dim_x :, self.dim_x :] = 1
+        A_free = np.zeros(((self.dim_x + dim_h) ** 2, dim_h ** 2))
+        d = 0
+        for n, i in enumerate(A_free_vect.ravel()):
+            if i == 1:
+                A_free[n, d] = 1
+                d += 1
+
+        vecA_cons = A_cons.flatten()
+        Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
+        Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
+        YX = sufficient_stat["xdx"].T - np.matmul(Pf, np.matmul(coeffs_force_old, sufficient_stat["bkx"]))
+        XX = sufficient_stat["xx"]
+        vecXX = np.kron(np.eye(self.dim_x + dim_h), XX)
+
+        print(vecA_cons)
+        print(vecXX)
+        print(YX.ravel())
+        # A = -np.matmul(YX, np.linalg.inv(XX))
+        free_A_part = np.matmul((np.matmul(A_free.T, YX.ravel()) - np.matmul(np.matmul(vecA_cons, vecXX), A_free)), np.linalg.inv(np.matmul(A_free.T, np.matmul(vecXX, A_free))))
+        print(free_A_part)
+        print(np.matmul(A_free, free_A_part).reshape((self.dim_x + dim_h, self.dim_x + dim_h)))
+        A = -np.matmul(A_free, free_A_part).reshape((self.dim_x + dim_h, self.dim_x + dim_h)) + A_cons
+        if OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
+            Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
+            Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
+
+            bkbk = np.matmul(Pf, np.matmul(np.matmul(coeffs_force_old, np.matmul(sufficient_stat["bkbk"], coeffs_force_old.T)), Pf.T))
+            bkdx = np.matmul(Pf, np.matmul(coeffs_force_old, sufficient_stat["bkdx"]))
+            bkx = np.matmul(Pf, np.matmul(coeffs_force_old, sufficient_stat["bkx"]))
+
+            residuals = sufficient_stat["dxdx"] + np.matmul(A, sufficient_stat["xdx"]) + np.matmul(A, sufficient_stat["xdx"]).T - bkdx.T - bkdx
+            residuals += np.matmul(A, np.matmul(sufficient_stat["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
+            SST = SST_old
+            SST[self.dim_x :, self.dim_x :] = 0.5 * (residuals + residuals.T)[self.dim_x :, self.dim_x :]
+        else:
+            SST = 1
+        return A, coeffs_force_old, SST

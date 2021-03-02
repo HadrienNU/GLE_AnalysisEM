@@ -57,15 +57,11 @@ class ABOBAModel(AbstractModel):
         """
         Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
         Pf[: self.dim_x, : self.dim_x] = 0.5 * dt * np.identity(self.dim_x)
-        mutilde = (
-            np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T - traj[:, 2 * self.dim_x : 3 * self.dim_x].T)
-            + np.matmul(expA[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T)
-            + np.matmul(expA + np.identity(self.dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T)))
-        ).T
+        mutilde = (np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T - traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(expA[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(expA + np.identity(self.dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T)))).T
 
         return traj[:, : self.dim_x], mutilde, expA[:, self.dim_x :]
 
-    def m_step(self, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+    def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
         """M step.
         TODO:   -Select dimension of fitted parameters from the sufficient stats
         """

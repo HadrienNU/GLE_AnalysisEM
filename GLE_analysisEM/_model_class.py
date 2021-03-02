@@ -33,7 +33,7 @@ class AbstractModel:
         """
         raise NotImplementedError
 
-    def m_step(self, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+    def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
         """M step.
         TODO:   -Select dimension of fitted parameters from the sufficient stats
         """

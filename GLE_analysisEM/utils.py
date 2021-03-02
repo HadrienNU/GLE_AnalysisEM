@@ -132,15 +132,16 @@ def split_loadDatas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, ra
         yield loadDatas_est(nppaths[train_index], dim_x)
 
 
-def bootstrap_Datas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, random_state=None):
+def bootstrap_Datas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, random_state=np.random.default_rng()):
     """
     Give a generator that give only a subset of the paths with replacement for bootstrapping
     See sklearn.utils.resample for documentation
     """
     nppaths = np.asarray(paths)
-    ss = ShuffleSplit(n_splits=n_splits, test_size=test_size, train_size=train_size, random_state=random_state)
-    for train_index, test_index in ss.split(paths):
-        yield loadDatas_est(nppaths[train_index], dim_x)
+    number_paths = np.floor(train_size * len(nppaths))
+    for n in range(n_splits):
+        paths_n = random_state.choice(nppaths, size=number_paths, replace=True)
+        yield loadDatas_est(paths_n, dim_x)
 
 
 def generateRandomDefPosMat(dim_x=1, dim_h=1, rng=np.random.default_rng(), max_ev=1.0, min_re_ev=0.005):
