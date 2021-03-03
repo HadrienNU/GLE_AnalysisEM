@@ -139,7 +139,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
 
-    modelname : {}, default to 'euler'.
+    model : {}, default to 'euler'.
         Model to be fitted
 
     A_init, C_init, force_init, mu_init, sig_init: array, optional
@@ -188,7 +188,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         OptimizeDiffusion=True,
         EnforceFDT=False,
         init_params="random",
-        modelname="euler",
+        model="euler",
         A_init=None,
         C_init=None,
         force_init=None,
@@ -208,7 +208,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.OptimizeDiffusion = OptimizeDiffusion
         self.EnforceFDT = EnforceFDT
 
-        self.modelname = modelname
+        self.model = model
 
         self.A_init = A_init
         self.C_init = C_init
@@ -258,11 +258,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.max_iter < 1:
             raise ValueError("Invalid value for 'max_iter': %d " "Estimation requires at least one iteration" % self.max_iter)
 
-        self.modelname = self.modelname.casefold()
+        self.model = self.model.casefold()
 
-        if self.modelname not in model_class.keys():
+        if self.model not in model_class.keys():
             raise ValueError("Model {} not implemented".format(self.model))
-        self.model = model_class[self.modelname](self.dim_x)
+        self.model_class = model_class[self.model](self.dim_x)
         if self.EnforceFDT and not self.OptimizeDiffusion:
             self.OptimizeDiffusion = True
             warnings.warn("As enforcement of FDT was asked, the diffusion coefficients will be optimized too.")
@@ -289,7 +289,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if self.EnforceFDT:
                 self.C_init = np.trace(self.C_init) * np.identity(self.dim_x + self.dim_h) / (self.dim_x + self.dim_h)
 
-            expA, SST = self.model._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
+            expA, SST = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
 
@@ -324,13 +324,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         _, n_features = X.shape
 
-        # if self.model in ["aboba"]:
-        #     expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
-        # elif self.model in ["overdamped", "euler", "euler_noiseless"]:
-        #     expected_features = 1 + 2 * self.dim_x  # Set the number of expected dimension in in input
-        self.dim_coeffs_force = n_features - self.model.expected_features()
+        self.dim_coeffs_force = n_features - self.model_class.expected_features()
         if self.dim_coeffs_force <= 0:
-            raise ValueError("X has {} features, but {} is expecting at least {} features as input. Did you forget to add basis features?".format(n_features, self.__class__.__name__, self.model.expected_features() + 1))
+            raise ValueError("X has {} features, but {} is expecting at least {} features as input. Did you forget to add basis features?".format(n_features, self.__class__.__name__, self.model_class.expected_features() + 1))
 
     def _initialize_parameters(self, random_state, traj_len=50):
         """Initialize the model parameters.
@@ -354,15 +350,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                     C = np.identity(self.dim_x + self.dim_h)
                 else:
                     C = np.asarray(self.C_init)
-            (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(A, C, self.dt)
+            (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A, C, self.dt)
         elif self.init_params == "user":
-            (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
+            (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
             raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
 
         if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
-            _, self.diffusion_coeffs = self.model._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
+            _, self.diffusion_coeffs = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
 
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
@@ -410,7 +406,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         self._check_n_features(X)
 
-        Xproc, idx_trajs = self.model.preprocessingTraj(X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         _min_traj_len = np.min([trj.shape[0] for trj in traj_list])
         # print(traj_list)
@@ -521,34 +517,19 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigh : array-like, shape (n_timstep, 2*dim_h,2*dim_h)
             Covariances of the pair of the hidden variables
         """
-        Xtplus, mutilde, R = self.model.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt)
-        # if self.model == "aboba":
-        #     Xtplus, mutilde, R = compute_expectation_estep_aboba(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
-        # elif self.model == "euler":
-        #     Xtplus, mutilde, R = compute_expectation_estep_euler(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
-        # elif self.model == "euler_noiseless":
-        #     Xtplus_full, mutilde_full, R = compute_expectation_estep_euler_nl(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
-        #     mutilde = mutilde_full  # [:, self.dim_x :]
-        #     Xtplus = Xtplus_full  # [:, :0]
-        # else:
-        #     raise ValueError("Model {} not implemented".format(self.model))
-        # print(np.max(np.imag(mutilde)), np.max(np.imag(R)), np.max(np.imag(self.diffusion_coeffs)))
+        Xtplus, mutilde, R = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt)
+
         return filtersmoother(Xtplus, mutilde, R, self.diffusion_coeffs, self.mu0, self.sig0)
 
     def _m_step_num(self, sufficient_stat):
         """
         Numerical minimization
         """
-        friction, force, diffusion = self.model.m_step_num(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # if self.model == "aboba":
-        #     friction, force, diffusion = m_step_num_aboba(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        friction, force, diffusion = self.model_class.m_step_num(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         self.friction_coeffs = friction
         if self.OptimizeForce:
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
-        # self.sig0 = sufficient_stat["Σ_0"]
-        # A, C = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs,self.dt)
-        # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
 
@@ -556,22 +537,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """M step.
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
         """
-        friction, force, diffusion = self.model.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # if self.model == "aboba":
-        #     friction, force, diffusion = m_step_aboba(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # elif self.model == "euler":
-        #     friction, force, diffusion = m_step_euler(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # elif self.model == "euler_noiseless":
-        #     friction, force, diffusion = m_step_euler_nl(sufficient_stat, self.dim_x, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # else:
-        #     raise ValueError("Model {} not implemented".format(self.model))
+        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
 
         self.friction_coeffs = friction
         if self.OptimizeForce:
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
         self.sig0 = sufficient_stat["Σ_0"]
-        # A, C = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs,self.dt)
+        # A, C = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs,self.dt)
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
@@ -601,38 +574,23 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _m_step_markov(self, sufficient_stat_vis):
         """Compute coefficients estimate via Markovian approximation to provide initialization"""
-        A_full, C_full = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
-        friction, force, diffusion = self.model.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat_vis, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # if self.model == "aboba":
-        #     friction, force, diffusion = m_step_aboba(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # elif self.model == "euler":
-        #     friction, force, diffusion = m_step_euler(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # elif self.model == "euler_noiseless":
-        #     friction, force, diffusion = m_step_euler_nl(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
-        # else:
-        #     raise ValueError("Model {} not implemented".format(self.model))
-        A, C = self.model._convert_local_coefficients(friction, diffusion, self.dt)
+        A_full, C_full = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
+        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat_vis, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+
+        A, C = self.model_class._convert_local_coefficients(friction, diffusion, self.dt)
         A_full[: self.dim_x, : self.dim_x] = A
 
         if self.OptimizeForce:
             self.force_coeffs = force
         if self.OptimizeDiffusion:
             C_full[: self.dim_x, : self.dim_x] = C
-        (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(A_full, C_full, self.dt)
+        (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A_full, C_full, self.dt)
 
     def _get_noise_prop(self, traj):
         """
         From current values of parameters, extract remaining noise on visible variables and return its correlation
         """
-        Xtplus, mutilde, _ = self.model.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt)
-        # if self.model == "aboba":
-        #     Xtplus, mutilde, _ = compute_expectation_estep_aboba(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
-        # elif self.model == "euler":
-        #     Xtplus, mutilde, _ = compute_expectation_estep_euler(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
-        # elif self.model == "euler_noiseless":
-        #     Xtplus, mutilde, _ = compute_expectation_estep_euler_nl(traj, self.friction_coeffs, self.force_coeffs, self.dim_x, self.dim_h, self.dt)
-        # else:
-        #     raise ValueError("Model {} not implemented".format(self.model))
+        Xtplus, mutilde, _ = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt)
 
         noise = Xtplus[:-1, :] - mutilde[:-1, : self.dim_x]
         return correlation(noise), np.mean(noise)
@@ -643,15 +601,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         if dim_h is None:
             dim_h = self.dim_h
-        ll = self.model.loglikelihood(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, dim_h, self.dt)
-        # if self.model == "aboba":
-        #     ll = loglikelihood_aboba(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
-        # elif self.model == "euler":
-        #     ll = loglikelihood_euler(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
-        # elif self.model == "euler_noiseless":
-        #     ll = loglikelihood_euler_nl(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.dim_x, dim_h, self.dt)
-        # else:
-        #     raise ValueError("Model {} not implemented".format(self.model))
+        ll = self.model_class.loglikelihood(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, dim_h, self.dt)
         if dim_h > 0 and not np.isnan(suff_datas["hS"]):
             return ll + suff_datas["hS"]
         else:
@@ -678,7 +628,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.dt = X[1, 0] - X[0, 0]
         self._check_n_features(X)
 
-        Xproc, idx_trajs = self.model.preprocessingTraj(X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
@@ -717,7 +667,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         check_is_fitted(self, "converged_")
         X = check_array(X, ensure_min_samples=4, allow_nd=True)
         self._check_n_features(X)
-        Xproc, idx_trajs = self.model.preprocessingTraj(X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         muh_out = None
         for traj in traj_list:
@@ -774,15 +724,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X_h = None
 
         for n in range(n_trajs):
-            txv, h = self.model.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
-            # if self.model == "aboba":
-            #     txv, h = ABOBA_generator(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
-            # elif self.model == "euler":
-            #     txv, h = euler_generator(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, A=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
-            # elif self.model == "euler_noiseless":
-            #     txv, h = euler_generator_nl(nsteps=n_samples, dt=self.dt, dim_x=self.dim_x, dim_h=self.dim_h, x0=x0, v0=v0, A=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
-            # else:
-            #     raise ValueError("Model {} not implemented".format(self.model))
+            txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
+
             if X is None:
                 X = txv
             else:
@@ -797,7 +740,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def get_coefficients(self):
         """Return the actual values of the fitted coefficients."""
-        A, C = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
+        A, C = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
         return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs, "dt": self.dt}
 
     def set_coefficients(self, coeffs):
@@ -808,7 +751,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         coeffs : dict
             Contains the value of the coefficients to set.
         """
-        (self.friction_coeffs, self.diffusion_coeffs) = self.model._convert_user_coefficients(np.asarray(coeffs["A"]), np.asarray(coeffs["C"]), self.dt)
+        (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(coeffs["A"]), np.asarray(coeffs["C"]), self.dt)
         (self.force_coeffs, self.mu0, self.sig0) = (coeffs["force"], coeffs["µ_0"], coeffs["Σ_0"])
 
     def _n_parameters(self):
