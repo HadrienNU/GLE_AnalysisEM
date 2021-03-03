@@ -249,6 +249,8 @@ class EulerFixMarkovModel(EulerModel):
         """M step.
         TODO:   -Select dimension of fitted parameters from the sufficient stats
         """
+        if dim_h == 0:
+            return EulerModel.m_step(self, A_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce)
         # OptimizeForce is supposed to be False
         A_cons = np.zeros((self.dim_x + dim_h, self.dim_x + dim_h))
         A_cons[: self.dim_x, : self.dim_x] = A_old[: self.dim_x, : self.dim_x]

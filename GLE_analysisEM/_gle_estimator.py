@@ -24,7 +24,7 @@ try:
 except ImportError as err:
     print(err)
     warnings.warn("Python fallback will been used for filtersmoother module.")
-    from .utils import filtersmoother
+    from ._kalman_python import filtersmoother
 
 model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel}
 
@@ -139,7 +139,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
 
-    model : {}, default to 'euler'.
+    modelname : {}, default to 'euler'.
         Model to be fitted
 
     A_init, C_init, force_init, mu_init, sig_init: array, optional
@@ -188,7 +188,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         OptimizeDiffusion=True,
         EnforceFDT=False,
         init_params="random",
-        model="euler",
+        modelname="euler",
         A_init=None,
         C_init=None,
         force_init=None,
@@ -208,7 +208,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.OptimizeDiffusion = OptimizeDiffusion
         self.EnforceFDT = EnforceFDT
 
-        self.modelname = model
+        self.modelname = modelname
 
         self.A_init = A_init
         self.C_init = C_init
@@ -602,7 +602,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _m_step_markov(self, sufficient_stat_vis):
         """Compute coefficients estimate via Markovian approximation to provide initialization"""
         A_full, C_full = self.model._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
-        friction, force, diffusion = self.model.m_step(sufficient_stat_vis, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        friction, force, diffusion = self.model.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat_vis, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         # if self.model == "aboba":
         #     friction, force, diffusion = m_step_aboba(sufficient_stat_vis, self.dim_x, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
         # elif self.model == "euler":
