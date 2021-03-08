@@ -153,7 +153,8 @@ class EulerNLModel(EulerModel):
             return friction_coeffs, diffusion_coeffs
 
         A = friction_coeffs / dt
-        C = np.zeros((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+        dim_h = A.shape[0] - self.dim_x
+        C = np.zeros((self.dim_x + dim_h, self.dim_x + dim_h))
         C[self.dim_x :, self.dim_x :] = scipy.linalg.solve_continuous_lyapunov(friction_coeffs[self.dim_x :, self.dim_x :], diffusion_coeffs)
 
         return A, C
@@ -239,7 +240,7 @@ class EulerNLModel(EulerModel):
         x_tp = x_t + dt * p_t
         force_t = dt * np.matmul(force_coeffs, basis.predict(np.reshape(x_t, (1, -1)))[0])
 
-        h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]
+        h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss
         p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t
         return x_tp, p_tp, h_tp
 
