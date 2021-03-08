@@ -54,7 +54,7 @@ class Markov_Estimator(GLE_Estimator):
         for each step.
     """
 
-    def __init__(self, dim_x=1, tol=5e-4, OptimizeForce=True, OptimizeDiffusion=True, EnforceFDT=False, model="aboba", random_state=None, warm_start=False, verbose=0, **kwargs):
+    def __init__(self, dim_x=1, tol=5e-4, OptimizeForce=True, OptimizeDiffusion=True, EnforceFDT=False, model="euler", A_init=None, C_init=None, force_init=None, random_state=None, warm_start=False, verbose=0, **kwargs):
         super(Markov_Estimator, self).__init__(
             dim_x=dim_x,
             dim_h=0,
@@ -65,9 +65,9 @@ class Markov_Estimator(GLE_Estimator):
             EnforceFDT=EnforceFDT,
             init_params="random",
             model=model,
-            A_init=None,
-            C_init=None,
-            force_init=None,
+            A_init=A_init,
+            C_init=C_init,
+            force_init=force_init,
             mu_init=None,
             sig_init=None,
             n_init=1,
@@ -99,7 +99,7 @@ class Markov_Estimator(GLE_Estimator):
 
         self._check_n_features(X)
 
-        Xproc, idx_trajs = self.model.preprocessingTraj(X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         _min_traj_len = np.min([trj.shape[0] for trj in traj_list])
         # print(traj_list)

@@ -363,7 +363,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
-            self.force_coeffs = -random_state.standard_normal(size=(self.dim_x, self.dim_coeffs_force))  # -np.ones((self.dim_x, self.dim_coeffs_force))
+            self.force_coeffs = -random_state.random(size=(self.dim_x, self.dim_coeffs_force))  # -np.ones((self.dim_x, self.dim_coeffs_force))
 
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:

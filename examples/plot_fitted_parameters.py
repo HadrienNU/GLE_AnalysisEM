@@ -28,8 +28,8 @@ def dV(X):
 
 dim_x = 1
 dim_h = 1
-random_state = None
-model = "euler_fix_markov"
+random_state = 42
+model = "euler"
 force = -np.identity(dim_x)
 # force = [[-0.25, -1], [1, -0.25]]
 A = np.array([[5e-2, -1.0], [1.0, 0.1]])
@@ -47,7 +47,7 @@ print(generator.get_coefficients())
 basis = GLE_BasisTransform(basis_type="linear")
 # basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(init_params="markov", verbose=2, verbose_interval=1, dim_x=dim_x, dim_h=dim_h, model=model, n_init=5, EnforceFDT=True, OptimizeForce=True, random_state=None, tol=1e-5, no_stop=False)
+estimator = GLE_Estimator(init_params="random", verbose=3, verbose_interval=1, dim_x=dim_x, dim_h=dim_h, model=model, n_init=1, EnforceFDT=False, OptimizeForce=False, random_state=7, tol=1e-3, no_stop=False)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 print("---- Real ones ----")
@@ -94,33 +94,33 @@ axs[1, 1].scatter(np.real(mem_ev), np.imag(mem_ev), label="Ev fitted")
 axs[1, 1].scatter(np.real(mem_ev_true), np.imag(mem_ev_true), label="Ev true")
 # axs[1, 1].set_aspect(1)
 
-
-def simulated_vacf(estimator, basis):
-    """
-    Get vacf via numericall simulation of the model
-    """
-    Ntrajs = 50
-    X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs, basis=basis)
-    traj_list = np.split(X, idx)
-    vacf = 0.0
-    for n, trj in enumerate(traj_list):
-        vacf += correlation(trj[:, 1 + estimator.dim_x])
-        time = trj[:, 0]
-    vacf /= Ntrajs
-    return time, vacf
-
-
-# ------ Diffusion ------#
-traj_list = np.split(X, idx)
-vacf_num = 0.0
-for n, trj in enumerate(traj_list):
-    vacf_num += correlation(trj[:, 2])
-    time = trj[:, 0]
-vacf_num /= len(traj_list)
-time_sim, vacf_sim = simulated_vacf(estimator, basis)
-axs[1, 0].plot(time[: len(time_sim) // 2], vacf_sim, label="Fitted VACF")
-axs[1, 0].set_title("Velocity autocorrelation function")
-axs[1, 0].plot(time[: len(time) // 2], vacf_num, label="Numerical VACF")
+#
+# def simulated_vacf(estimator, basis):
+#     """
+#     Get vacf via numericall simulation of the model
+#     """
+#     Ntrajs = 50
+#     X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs, basis=basis)
+#     traj_list = np.split(X, idx)
+#     vacf = 0.0
+#     for n, trj in enumerate(traj_list):
+#         vacf += correlation(trj[:, 1 + estimator.dim_x])
+#         time = trj[:, 0]
+#     vacf /= Ntrajs
+#     return time, vacf
+#
+#
+# # ------ Diffusion ------#
+# traj_list = np.split(X, idx)
+# vacf_num = 0.0
+# for n, trj in enumerate(traj_list):
+#     vacf_num += correlation(trj[:, 2])
+#     time = trj[:, 0]
+# vacf_num /= len(traj_list)
+# time_sim, vacf_sim = simulated_vacf(estimator, basis)
+# axs[1, 0].plot(time[: len(time_sim) // 2], vacf_sim, label="Fitted VACF")
+# axs[1, 0].set_title("Velocity autocorrelation function")
+# axs[1, 0].plot(time[: len(time) // 2], vacf_num, label="Numerical VACF")
 
 
 axs[1, 0].legend(loc="upper right")

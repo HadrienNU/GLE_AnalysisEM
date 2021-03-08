@@ -15,21 +15,25 @@ import pickle
 dim_x = 1
 dim_h = 1
 random_state = 42
-model = "aboba"
+model = "euler_fix_markov"
 force = -np.identity(dim_x)
+# force = [[-0.25, -1], [1, -0.25]]
+A = np.array([[5e-2, -1.0], [1.0, 0.1]])
 
-A = np.array([[5.0e-9, -1.0], [1.0, 5e-2]])
-C = np.identity(dim_x + dim_h)
 # ------ Generation ------#
 pot_gen = GLE_BasisTransform(basis_type="linear")
+# pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="user", A_init=A, C_init=C, model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=10, x0=0.0, v0=0.0, basis=pot_gen)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, A_init=A, EnforceFDT=True, force_init=force, init_params="random", model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
+
+
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
+# basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(init_params="random", verbose=3, verbose_interval=50, dim_x=dim_x, dim_h=1, model=model, n_init=5, EnforceFDT=True, OptimizeForce=True, OptimizeDiffusion=True, random_state=42, tol=1e-3, no_stop=True, max_iter=50)
+estimator = GLE_Estimator(init_params="markov", verbose=2, verbose_interval=10, force_init=force, dim_x=dim_x, dim_h=dim_h, model=model, n_init=1, EnforceFDT=False, OptimizeForce=False, random_state=7, tol=1e-6, no_stop=False)
 estimator.fit(X, idx_trajs=idx)
 with open("fit_trajs.pkl", "wb") as output:
     pickle.dump(estimator.coeffs_list_all, output)
@@ -55,23 +59,23 @@ for coeffs_list in coeffs_list_all:
         # y[1, n] = np.imag(eigs_A[0])
         # x[2, n] = np.real(eigs_A[1])
         # y[2, n] = np.imag(eigs_A[1])
-        x[1, n] = n  # step["force"][0, 0]
+        x[1, n] = step["force"][0, 0]
         y[1, n] = step["ll"]
         x[2, n] = step["µ_0"][0]
         y[2, n] = step["Σ_0"][0, 0]
-        x[3, n] = step["A"][0, 1]
-        y[3, n] = step["A"][1, 0]
+        x[3, n] = step["A"][0, 1] * step["A"][1, 0]
+        y[3, n] = step["C"][0, 0]
     for i in range(nb_plot):
         axs[i].plot(x[i, :], y[i, :], "-x", label="{}".format(n))
     # axs[1].plot(x[2, :], y[2, :], "-x", label="{}".format(n))
 axs[0].set_xlabel("A[0,0]")
 axs[0].set_ylabel("A[1,1]")
-axs[1].set_xlabel("n")
-axs[1].set_ylabel("Force")
+axs[1].set_xlabel("Force")
+axs[1].set_ylabel("ll")
 axs[2].set_xlabel("µ_0")
 axs[2].set_ylabel("Σ_0")
-axs[3].set_xlabel("A[0,1]")
-axs[3].set_ylabel("A[1,0]")
+axs[3].set_xlabel("A[0,1]*A[1,0]")
+axs[3].set_ylabel("C[0,0]")
 # axs[1].set_title("Cross section along A[1,1]")
 # for i in range(nb_points):
 #     axs[1].plot(y_coords, score_val[:, i])

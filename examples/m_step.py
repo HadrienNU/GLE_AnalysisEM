@@ -52,7 +52,7 @@ C = np.identity(dim_x + dim_h)
 pot_gen = GLE_BasisTransform(basis_type="linear")
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
 # pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", C_init=C, model=model, random_state=random_state)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=0.0, EnforceFDT=False, force_init=force, init_params="random", C_init=C, model=model, random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=10000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
 
 # X, idx, Xh = loadTestDatas_est(["../GLE_analysisEM/tests/0_trajectories.dat", "../GLE_analysisEM/tests/1_trajectories.dat"], 1, 1)
