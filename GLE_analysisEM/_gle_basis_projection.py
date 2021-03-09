@@ -117,9 +117,11 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         Project the datas according to the model to return position at evaluation point
         """
         dt = X[1, 0] - X[0, 0]
-        if self.model in ["aboba"]:
+        if "aboba" in self.model:
             x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-        elif self.model in ["euler", "euler_noiseless"]:
+        elif "euler" in self.model:
+            x_pos = X[:, 1 : 1 + self.dim_x]
+        else:
             x_pos = X[:, 1 : 1 + self.dim_x]
         return x_pos
 
