@@ -14,8 +14,8 @@ import pickle
 
 dim_x = 1
 dim_h = 1
-random_state = 42
-model = "euler_fix_markov"
+random_state = None
+model = "euler_fv"
 force = -np.identity(dim_x)
 # force = [[-0.25, -1], [1, -0.25]]
 A = np.array([[5e-2, -1.0], [1.0, 0.1]])
@@ -24,7 +24,7 @@ A = np.array([[5e-2, -1.0], [1.0, 0.1]])
 pot_gen = GLE_BasisTransform(basis_type="linear")
 # pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, A_init=A, EnforceFDT=True, force_init=force, init_params="random", model=model, random_state=random_state)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="random", model=model, random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
 print(generator.get_coefficients())
 
@@ -33,7 +33,7 @@ print(generator.get_coefficients())
 basis = GLE_BasisTransform(basis_type="linear")
 # basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(init_params="markov", verbose=2, verbose_interval=10, force_init=force, dim_x=dim_x, dim_h=dim_h, model=model, n_init=1, EnforceFDT=False, OptimizeForce=False, random_state=7, tol=1e-6, no_stop=False)
+estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, force_init=0.3 * force, dim_x=dim_x, dim_h=dim_h, model=model, n_init=3, EnforceFDT=False, OptimizeForce=True, random_state=7, tol=1e-7, no_stop=False, max_iter=300)
 estimator.fit(X, idx_trajs=idx)
 with open("fit_trajs.pkl", "wb") as output:
     pickle.dump(estimator.coeffs_list_all, output)

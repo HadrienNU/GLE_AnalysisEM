@@ -14,7 +14,7 @@ from sklearn.exceptions import ConvergenceWarning
 
 from .utils import generateRandomDefPosMat, correlation
 from ._aboba_model import ABOBAModel
-from ._euler_model import EulerModel, EulerNLModel, EulerFixMarkovModel
+from ._euler_model import EulerModel, EulerNLModel, EulerFixMarkovModel, EulerForceVisibleModel
 
 from ._gle_basis_projection import GLE_BasisTransform
 
@@ -26,7 +26,7 @@ except ImportError as err:
     warnings.warn("Python fallback will been used for filtersmoother module.")
     from ._kalman_python import filtersmoother
 
-model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel}
+model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel, "euler_fv": EulerForceVisibleModel}
 
 
 def sufficient_stats(traj, dim_x):
@@ -465,11 +465,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 coeff_list_init.append(curr_coeffs)
 
                 self._m_step(new_stat)
-                if self.verbose >= 2:
-                    lower_bound_m_step = self.loglikelihood(new_stat)
-                    if lower_bound_m_step - lower_bound < 0:
-                        print("Delta ll after M step:", lower_bound_m_step - lower_bound)
-                if np.isnan(lower_bound) or not self._check_finiteness():  # If we have nan value we simply restart the iteration
+                lower_bound_m_step = self.loglikelihood(new_stat)
+                if self.verbose >= 2 and lower_bound_m_step - lower_bound < 0:
+                    print("Delta ll after M step:", lower_bound_m_step - lower_bound)
+                if np.isnan(lower_bound_m_step) or not self._check_finiteness():  # If we have nan value we simply restart the iteration
                     warnings.warn("Initialization %d has NaN values. Ends iteration" % (init), ConvergenceWarning)
                     if self.verbose >= 2:
                         print("Friction:\n{} \n Diffusion:\n{} \n Force :\n{} \n µ0 :\n{} \n Σ0:\n{} \n".format(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.mu0, self.sig0))
