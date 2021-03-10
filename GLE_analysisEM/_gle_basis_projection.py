@@ -105,7 +105,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         The type of the basis.
     """
 
-    def __init__(self, model="aboba", basis_type="linear", transformer=None, **kwargs):
+    def __init__(self, model="euler", basis_type="linear", transformer=None, **kwargs):
 
         self.model = model
         self.basis_type = basis_type
