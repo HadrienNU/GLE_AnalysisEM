@@ -542,8 +542,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.OptimizeForce:
             self.force_coeffs = force
         self.mu0 = sufficient_stat["µ_0"]
-        self.sig0 = sufficient_stat["Σ_0"]
-        # A, C = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs,self.dt)
+        # self.sig0 = sufficient_stat["Σ_0"]
+        # A, C = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
