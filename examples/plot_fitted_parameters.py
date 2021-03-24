@@ -27,7 +27,7 @@ def dV(X):
 
 
 dim_x = 1
-dim_h = 1
+dim_h = 3
 random_state = None
 model = "euler_fv"
 force = -np.identity(dim_x)
@@ -47,7 +47,7 @@ print(generator.get_coefficients())
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 X = basis.fit_transform(X)
-estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=5, EnforceFDT=False, OptimizeForce=True, random_state=7, tol=1e-7, no_stop=False, max_iter=300)
+estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=3, EnforceFDT=False, OptimizeForce=True, random_state=7, tol=1e-7, no_stop=False, max_iter=300)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 print("---- Real ones ----")
