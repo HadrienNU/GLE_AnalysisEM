@@ -137,7 +137,7 @@ def bootstrap_Datas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, ra
     See sklearn.utils.resample for documentation
     """
     nppaths = np.asarray(paths)
-    number_paths = np.floor(train_size * len(nppaths))
+    number_paths = int(np.floor(train_size * len(nppaths)))
     for n in range(n_splits):
         paths_n = random_state.choice(nppaths, size=number_paths, replace=True)
         yield loadDatas_est(paths_n, dim_x)
