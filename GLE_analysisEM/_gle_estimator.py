@@ -11,6 +11,7 @@ from sklearn.base import BaseEstimator, DensityMixin
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
+from sklearn.neighbors import KDTree
 
 from .utils import generateRandomDefPosMat, correlation
 from ._aboba_model import ABOBAModel
@@ -26,7 +27,28 @@ except ImportError as err:
     warnings.warn("Python fallback will been used for filtersmoother module.")
     from ._kalman_python import filtersmoother
 
+import multiprocessing
+
 model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel, "euler_fv": EulerForceVisibleModel}
+
+
+def scalar_product_localized_basis(traj, dim_x, dim_h, basis):
+    """
+    In case of large number of basis, we have to be a bit more clever
+    """
+    xval = traj[:-1, 2 * dim_x : 3 * dim_x]
+    tree = KDTree(xval)
+    dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+    bkx = np.zeros((basis.nb_basis_elt_, dim_x))
+    bkdx = np.zeros((basis.nb_basis_elt_, dim_x))
+    bkbk = np.zeros((basis.nb_basis_elt_, basis.nb_basis_elt))
+
+    for elem in basis.elem:
+        ind_loc = tree.query_radius(elem.center, r=elem.size)
+        bk_loc = elem(xval[ind_loc])
+        bkx[elem.index, :] = np.mean(bk_loc[:, :, np.newaxis] * xval[ind_loc, np.newaxis, :], axis=0)
+        bkdx[elem.index, :] = np.mean(bk_loc[:, :, np.newaxis] * dx[ind_loc, np.newaxis, :], axis=0)
+        bkbk[elem.index, :] = np.mean(bk_loc[:, :, np.newaxis] * bk_loc[:, np.newaxis, :], axis=0)
 
 
 def sufficient_stats(traj, dim_x):
@@ -103,6 +125,16 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     hSsimple = 0.5 * np.log(dets[dets > 0.0]).mean()
     # TODO take care of initial value that is missing
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple})
+
+
+# def e_step_worker(est, traj, datas_visible, N, queue):
+#     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
+#     queue.put(sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / N)
+
+
+def e_step_worker_pool(est, traj, datas_visible, N):
+    muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
+    return sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / N
 
 
 class GLE_Estimator(DensityMixin, BaseEstimator):
@@ -200,6 +232,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         no_stop=False,
         verbose=0,
         verbose_interval=10,
+        multiprocessing=False,
     ):
         self.dim_x = dim_x
         self.dim_h = dim_h
@@ -227,6 +260,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.random_state = random_state
         self.verbose = verbose
         self.verbose_interval = verbose_interval
+        self.multiprocessing = multiprocessing
 
     def _more_tags(self):
         return {"X_types": "2darray"}
@@ -447,11 +481,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             # Algorithm loop
             for n_iter in range(1, self.max_iter + 1):
                 prev_lower_bound = lower_bound
-                new_stat = 0.0
                 self._enforce_degeneracy()
-                for traj in traj_list:
-                    muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-                    new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+                new_stat = self._e_step_stats(traj_list, datas_visible)
 
                 # new_stat_rs = self._rescale_hidden(new_stat)
                 # new_stat_rs=new_stat
@@ -520,6 +551,32 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         return filtersmoother(Xtplus, mutilde, R, self.diffusion_coeffs, self.mu0, self.sig0)
 
+    def _e_step_stats(self, traj_list, datas_visible):
+        new_stat = 0.0
+        # if self.multiprocessing == "process":
+        #     q = multiprocessing.Queue()
+        #     proc = []
+        #     for n, traj in enumerate(traj_list):
+        #         p = multiprocessing.Process(target=e_step_worker, args=(self, traj, datas_visible, len(traj_list), q))
+        #         p.start()
+        #         proc.append(p)
+        #     for p in proc:
+        #         ret = q.get()  # will block
+        #         new_stat += ret
+        #     for n, p in enumerate(proc):
+        #         p.join()
+        if self.multiprocessing > 0:
+            with multiprocessing.Pool(processes=self.multiprocessing) as pool:
+                proc = [pool.apply_async(e_step_worker_pool, args=(self, traj, datas_visible, len(traj_list))) for traj in traj_list]
+                for p in proc:
+                    ret = p.get()  # will block
+                    new_stat += ret
+        else:
+            for traj in traj_list:
+                muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
+                new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+        return new_stat
+
     def _m_step_num(self, sufficient_stat):
         """
         Numerical minimization
@@ -561,6 +618,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
         # #     self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
         # #     self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
+
+    def _em_step(self, vect_coeff, traj_list, datas_visible):
+        """
+        Wrapper of the E and M for gradient descent algorithm
+        """
+        self.unvectorization_coefficient(vect_coeff)
+        new_stat = self._e_step_stats(traj_list, datas_visible)
+        return self.loglikelihood(new_stat)
 
     def _check_finiteness(self):
         """
@@ -632,10 +697,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
         if Xh is None:
+            datas_visible = 0.0
             for traj in traj_list:
-                datas = sufficient_stats(traj, self.dim_x)
-                muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-                new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+                datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
+            new_stat = self._e_step_stats(traj_list, datas_visible)
+            # muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
+            # new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
         else:
             traj_list_h = np.split(Xh, idx_trajs)
             for n, traj in enumerate(traj_list):
@@ -752,6 +819,32 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(coeffs["A"]), np.asarray(coeffs["C"]), self.dt)
         (self.force_coeffs, self.mu0, self.sig0) = (coeffs["force"], coeffs["µ_0"], coeffs["Σ_0"])
+
+    def vectorization_coefficients(self):
+        """
+        Return all current coefficients under a vector form
+        """
+        vect = self.friction_coeffs.ravel()
+        vect = np.hstack((vect, self.mu0))
+        if self.OptimizeForce:
+            vect = np.hstack((vect, self.force_coeffs.ravel()))
+        if self.OptimizeDiffusion:
+            vect = np.hstack((vect, self.diffusion_coeffs.ravel()))
+        return vect
+
+    def unvectorization_coefficient(self, vect_c):
+        """
+        Set estimator coefficient to value given by the vector
+        """
+        friction, remaining = np.split(vect_c, [(self.dim_x + self.dim_h) ** 2])
+        self.friction_coeffs = friction.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+        self.mu0, remaining = np.split(remaining, [self.dim_h])
+        if self.OptimizeForce:
+            force, remaining = np.split(remaining, [self.dim_x * self.dim_coeffs_force])
+            self.force_coeffs = force.reshape((self.dim_x, self.dim_coeffs_force))
+        if self.OptimizeDiffusion:
+            diffusion, remaining = np.split(remaining, [(self.dim_x + self.dim_h) ** 2])
+            self.diffusion_coeffs = diffusion.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
