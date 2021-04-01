@@ -25,11 +25,11 @@ pd.set_option("display.max_colwidth", -1)
 dim_x = 1
 dim_h = 1
 random_state = 42
-model = "aboba"
+model = "euler_fv"
 force = -np.identity(dim_x)
-max_iter = 100
+max_iter = 200
 
-ntrajs = 100
+ntrajs = 20
 
 basis = GLE_BasisTransform(basis_type="linear", model=model)
 
@@ -43,12 +43,12 @@ print("Initial ll", generator.score(X, idx_trajs=idx))
 
 
 # Trajectory estimation
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=2, verbose_interval=10)
+estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=20)
 # We set some initial conditions, check for stability
 # estimator.set_init_coeffs(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)
 print(estimator.get_coefficients())
 
-plt.plot(estimator.logL[0], label="Log L")
-plt.legend(loc="upper right")
-plt.show()
+# plt.plot(estimator.logL[0], label="Log L")
+# plt.legend(loc="upper right")
+# plt.show()

@@ -4,6 +4,7 @@ Somes utilities function
 import numpy as np
 import scipy.linalg
 from sklearn.model_selection import ShuffleSplit
+import numpy.polynomial.polynomial as poly
 
 
 def loadTestDatas_est(paths, dim_x, dim_h):
@@ -252,23 +253,44 @@ def memory_timescales(coeffs, dim_x):
     return np.linalg.eigvals(coeffs["A"][dim_x:, dim_x:])
 
 
-def fit_memory_fct_helper(dt, ntimes, noDirac):
+def prony(t, F, m):
+    """Input  : real arrays t, F of the same size (ti, Fi): integer m - the number of modes in the exponential fit
+    Output : arrays a and b such that F(t) ~ sum ai exp(bi*t)
     """
-    The function to fit
-    """
-    dim_x = Avh.shape[0]
-    Kernel = np.zeros((ntimes, dim_x, dim_x))
-    for n in range(ntimes):
-        Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * n * dt * Ahh), Ahv))
-    if not noDirac:
-        Kernel[0, :, :] += 2 * Avv
-    return Kernel
 
+    # Solve LLS problem in step 1
+    # Amat is (N-m)*m and bmat is N-m*1
+    N = len(t)
+    Amat = np.zeros((N - m, m))
+    bmat = F[m:N]
 
-def fit_memory_function():
-    """
-    Provide a fit of the memory function to sum of exponential
-    """
+    for jcol in range(m):
+        Amat[:, jcol] = F[m - jcol - 1 : N - 1 - jcol]
+
+    sol = np.linalg.lstsq(Amat, bmat)
+    d = sol[0]
+
+    # Solve the roots of the polynomial in step 2
+    # first, form the polynomial coefficients
+    c = np.zeros(m + 1)
+    c[m] = 1.0
+    for i in range(1, m + 1):
+        c[m - i] = -d[i - 1]
+
+    u = poly.polyroots(c)
+    b_est = np.log(u) / (t[1] - t[0])
+
+    # Set up LLS problem to find the "a"s in step 3
+    Amat = np.zeros((N, m))
+    bmat = F
+
+    for irow in range(N):
+        Amat[irow, :] = u ** irow
+
+    sol = np.linalg.lstsq(Amat, bmat)
+    a_est = sol[0]
+
+    return a_est, b_est
 
 
 def correlation(a, b=None, subtract_mean=False):

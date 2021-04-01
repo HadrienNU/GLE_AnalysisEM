@@ -127,11 +127,6 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple})
 
 
-# def e_step_worker(est, traj, datas_visible, N, queue):
-#     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
-#     queue.put(sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / N)
-
-
 def e_step_worker_pool(est, traj, datas_visible, N):
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
     return sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / N
@@ -208,6 +203,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     verbose_interval : int, default to 10.
         Number of iteration done before the next print.
+
+    multiprocessing: int, default to 1
+        Number of process to use for E step
     """
 
     def __init__(
@@ -232,7 +230,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         no_stop=False,
         verbose=0,
         verbose_interval=10,
-        multiprocessing=False,
+        multiprocessing=1,
     ):
         self.dim_x = dim_x
         self.dim_h = dim_h
@@ -553,19 +551,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _e_step_stats(self, traj_list, datas_visible):
         new_stat = 0.0
-        # if self.multiprocessing == "process":
-        #     q = multiprocessing.Queue()
-        #     proc = []
-        #     for n, traj in enumerate(traj_list):
-        #         p = multiprocessing.Process(target=e_step_worker, args=(self, traj, datas_visible, len(traj_list), q))
-        #         p.start()
-        #         proc.append(p)
-        #     for p in proc:
-        #         ret = q.get()  # will block
-        #         new_stat += ret
-        #     for n, p in enumerate(proc):
-        #         p.join()
-        if self.multiprocessing > 0:
+        if self.multiprocessing > 1:  # If we ask for more than one process
             with multiprocessing.Pool(processes=self.multiprocessing) as pool:
                 proc = [pool.apply_async(e_step_worker_pool, args=(self, traj, datas_visible, len(traj_list))) for traj in traj_list]
                 for p in proc:
