@@ -7,7 +7,6 @@ Result of the fit as a function of the number of trajectories for :class:`GLE_an
 """
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 
 # from GLE_analysisEM.utils import loadTestDatas_est
@@ -29,7 +28,7 @@ model = "euler_fv"
 force = -np.identity(dim_x)
 max_iter = 200
 
-ntrajs = 20
+ntrajs = 150
 
 basis = GLE_BasisTransform(basis_type="linear", model=model)
 
@@ -43,7 +42,7 @@ print("Initial ll", generator.score(X, idx_trajs=idx))
 
 
 # Trajectory estimation
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=20)
+estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=32)
 # We set some initial conditions, check for stability
 # estimator.set_init_coeffs(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)
