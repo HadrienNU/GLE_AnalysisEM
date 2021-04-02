@@ -295,7 +295,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         elif self.basis_type == "bins":
             self.nb_basis_elt_ = self.featuresTransformer.n_bins_
         elif self.basis_type == "bsplines":
-            self.nb_basis_elt_ = self.featuresTransformer.nsplines
+            self.nb_basis_elt_ = self.featuresTransformer.nsplines_
         else:
             self.nb_basis_elt_ = self.dim_x
 

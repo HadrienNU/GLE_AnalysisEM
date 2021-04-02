@@ -5,6 +5,7 @@ import numpy as np
 import scipy.linalg
 from sklearn.model_selection import ShuffleSplit
 import numpy.polynomial.polynomial as poly
+import scipy.integrate
 
 
 def loadTestDatas_est(paths, dim_x, dim_h):
@@ -293,6 +294,16 @@ def prony(t, F, m):
     return a_est, b_est
 
 
+def prony_eval(t, a, b):
+    """
+    Evaluate a prony series for each point in t
+    """
+    series = np.zeros_like(t, dtype=np.complex)
+    for i, a in enumerate(a):
+        series += a[i] * np.exp(b[i] * t)
+    return np.real(series)
+
+
 def correlation(a, b=None, subtract_mean=False):
     """
     Correlation between a and b
@@ -384,5 +395,8 @@ def forcefield_plot2D(x_lims, basis, force_coeffs):
     return x, y, f[:, :, 0], f[:, :, 1]
 
 
-def potential_reconstruction():
+def potential_reconstruction_1D(x_lims, basis, force_coeffs):
     """From the force field reconstruct the potential"""
+    x = np.linspace(x_lims[0][0], x_lims[0][1], int(x_lims[0][2]))
+    sol = scipy.integrate.odeint(lambda y, t: -np.matmul(force_coeffs, basis.transform(np.array([t]).reshape(-1, 1)).T)[0, 0], [0.0], x)
+    return x, sol[:, 0]

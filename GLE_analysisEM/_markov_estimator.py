@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.utils import check_random_state, check_array
 
 from ._gle_estimator import GLE_Estimator, sufficient_stats
+from ._gle_basis_projection import GLE_BasisTransform
 
 
 class Markov_Estimator(GLE_Estimator):
@@ -54,7 +55,7 @@ class Markov_Estimator(GLE_Estimator):
         for each step.
     """
 
-    def __init__(self, dim_x=1, tol=5e-4, OptimizeForce=True, OptimizeDiffusion=True, EnforceFDT=False, model="euler", A_init=None, C_init=None, force_init=None, random_state=None, warm_start=False, verbose=0, **kwargs):
+    def __init__(self, dim_x=1, basis=GLE_BasisTransform(basis_type="linear"), tol=5e-4, OptimizeForce=True, OptimizeDiffusion=True, EnforceFDT=False, model="euler", A_init=None, C_init=None, force_init=None, random_state=None, warm_start=False, verbose=0, **kwargs):
         super(Markov_Estimator, self).__init__(
             dim_x=dim_x,
             dim_h=0,
@@ -76,6 +77,7 @@ class Markov_Estimator(GLE_Estimator):
             no_stop=False,
             verbose=verbose,
             verbose_interval=1,
+            basis=basis,
         )
 
     def fit(self, X, y=None, idx_trajs=[]):
