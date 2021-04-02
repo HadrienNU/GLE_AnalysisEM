@@ -32,7 +32,7 @@ class ABOBAModel(AbstractModel):
 
         return A, C
 
-    def preprocessingTraj(self, X, idx_trajs=[]):
+    def preprocessingTraj(self, basis, X, idx_trajs=[]):
         """
         From position and velocity array compute everything that is needed for the following computation
         """
@@ -47,7 +47,7 @@ class ABOBAModel(AbstractModel):
         xv_plus_proj = (np.matmul(projmat, np.roll(X[:, 1 : 1 + 2 * self.dim_x], -1, axis=0).T)).T
         xv_proj = np.matmul(P, X[:, 1 : 1 + 2 * self.dim_x].T).T
         v = X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-        bk = X[:, 1 + 2 * self.dim_x :]
+        bk = basis.fit_transform(X[:, 1 : 1 + self.dim_x] + 0.5 * dt * v)
         return np.hstack((xv_plus_proj, xv_proj, v, bk)), idx_trajs
 
     def compute_expectation_estep(self, traj, expA, force_coeffs, dim_h, dt):
@@ -57,7 +57,11 @@ class ABOBAModel(AbstractModel):
         """
         Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
         Pf[: self.dim_x, : self.dim_x] = 0.5 * dt * np.identity(self.dim_x)
-        mutilde = (np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T - traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(expA[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(expA + np.identity(self.dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T)))).T
+        mutilde = (
+            np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T - traj[:, 2 * self.dim_x : 3 * self.dim_x].T)
+            + np.matmul(expA[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T)
+            + np.matmul(expA + np.identity(self.dim_x + dim_h), np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T)))
+        ).T
 
         return traj[:, : self.dim_x], mutilde, expA[:, self.dim_x :]
 
@@ -128,7 +132,7 @@ class ABOBAModel(AbstractModel):
 
     def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
         xhalf = x_t + 0.5 * dt * p_t
-        force_t = np.matmul(force_coeffs, basis.predict(np.reshape(xhalf, (1, -1)))[0])  # The [0] because predict return an n_timestep*n_features array
+        force_t = np.matmul(force_coeffs, basis.transform(np.reshape(xhalf, (1, -1)))[0])  # The [0] because transform return an n_timestep*n_features array
         phalf = p_t + 0.5 * dt * force_t
         phalfprime = np.matmul(friction[0 : self.dim_x, 0 : self.dim_x], phalf) + np.matmul(friction[0 : self.dim_x, self.dim_x :], h_t) + gauss[: self.dim_x]
         h_tp = np.matmul(friction[self.dim_x :, 0 : self.dim_x], phalf) + np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]

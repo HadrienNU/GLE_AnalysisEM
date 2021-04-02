@@ -23,7 +23,7 @@ class AbstractModel:
         """
         raise NotImplementedError
 
-    def preprocessingTraj(self, X, idx_trajs=[]):
+    def preprocessingTraj(self, basis, X, idx_trajs=[]):
         raise NotImplementedError
 
     def compute_expectation_estep(self, traj, A, force_coeffs, dim_h, dt):

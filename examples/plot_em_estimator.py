@@ -32,18 +32,17 @@ max_iter = 100
 nb_trajs = [1, 2, 5, 10, 15, 20, 25]
 to_plot_logL = np.empty((len(nb_trajs), max_iter))
 
-basis = GLE_BasisTransform(basis_type="linear", model=model)
+basis = GLE_BasisTransform(basis_type="linear")
 for k, ntrajs in enumerate(nb_trajs):
     # Trajectory generation
-    generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
-    X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
+    generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, basis=basis, EnforceFDT=False, force_init=force, init_params="random", model=model, random_state=random_state)
+    X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0)
     print("Ntraj: {}".format(ntrajs))
     if k == 0:
         print("Real parameters", generator.get_coefficients())
-    X = basis.fit_transform(X)
 
     # Trajectory estimation
-    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, max_iter=max_iter, n_init=10, random_state=None, verbose=1)
+    estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, max_iter=max_iter, n_init=10, random_state=None, verbose=1)
     # We set some initial conditions
     # estimator.set_init_coeffs(generator.get_coefficients())
 

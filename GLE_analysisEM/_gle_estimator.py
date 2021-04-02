@@ -144,7 +144,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     dim_h : int, default=1
         The number of hidden dimensions
 
-    tol : float, defaults to 5e-4.
+    tol : float, defaults to 1e-5.
         The convergence threshold. EM iterations will stop when the lower bound average gain is below this threshold.
 
     max_iter: int, default=100
@@ -168,6 +168,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     model : {}, default to 'euler'.
         Model to be fitted
+
+    basis: a scikit-learn Transformer class, default to linear basis.
+        Transformer to get value of the basis function
 
     A_init, C_init, force_init, mu_init, sig_init: array, optional
         The user-provided initial coefficients, defaults to None.
@@ -212,13 +215,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self,
         dim_x=1,
         dim_h=1,
-        tol=5e-4,
+        tol=1e-5,
         max_iter=100,
         OptimizeForce=True,
         OptimizeDiffusion=True,
         EnforceFDT=False,
         init_params="random",
         model="euler",
+        basis=GLE_BasisTransform(basis_type="linear"),
         A_init=None,
         C_init=None,
         force_init=None,
@@ -240,6 +244,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.EnforceFDT = EnforceFDT
 
         self.model = model
+        self.basis = basis
 
         self.A_init = A_init
         self.C_init = C_init
@@ -345,21 +350,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if not hasattr(self, "diffusion_coeffs"):
             self.diffusion_coeffs = np.identity(self.dim_x + self.dim_h)
 
-    def _check_n_features(self, X):
-        """Check if we have enough datas to to the fit.
-        It is required that  1[time]+2*dim_x[position, velocity]+dim_coeffs_force[force basis] features are present.
-
-        Parameters
-        ----------
-        X : {ndarray, sparse matrix} of shape (n_samples, n_features)
-            The input samples.
-        """
-        _, n_features = X.shape
-
-        self.dim_coeffs_force = n_features - self.model_class.expected_features()
-        if self.dim_coeffs_force <= 0:
-            raise ValueError("X has {} features, but {} is expecting at least {} features as input. Did you forget to add basis features?".format(n_features, self.__class__.__name__, self.model_class.expected_features() + 1))
-
     def _initialize_parameters(self, random_state, traj_len=50):
         """Initialize the model parameters.
 
@@ -391,6 +381,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
             _, self.diffusion_coeffs = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
+
+        if not hasattr(self.basis, "fitted_"):  # Setup the basis if needed
+            dummytraj = np.zeros((1, self.dim_x))
+            self.basis.fit(dummytraj)
+        self.dim_coeffs_force = self.basis.nb_basis_elt_
 
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
@@ -432,13 +427,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         -------
         self
         """
-        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        X = check_array(X, ensure_min_samples=4, ensure_min_features=self.dim_x)
         self.dt = X[1, 0] - X[0, 0]
         self._check_initial_parameters()
 
-        self._check_n_features(X)
-
-        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         _min_traj_len = np.min([trj.shape[0] for trj in traj_list])
         # print(traj_list)
@@ -524,7 +517,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if not self.converged_:
                 warnings.warn("Initialization %d did not converge. " "Try different init parameters, " "or increase max_iter, tol " "or check for degenerate data." % (init + 1), ConvergenceWarning)
         if best_coeffs is not None:
-            self.set_coefficients(best_coeffs)
+            self.set_coefficients(best_coeffs, with_basis=False)  # Don't set basis coefficients
         self.n_iter_ = best_n_iter
         self.n_best_init_ = best_n_init
         self.lower_bound_ = max_lower_bound
@@ -674,11 +667,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Log likelihood of the Gaussian mixture given X.
         """
         check_is_fitted(self, "initialized_")
-        X = check_array(X, ensure_min_samples=4, allow_nd=True)
+        X = check_array(X, ensure_min_samples=4, ensure_min_features=self.dim_x)
         self.dt = X[1, 0] - X[0, 0]
-        self._check_n_features(X)
 
-        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
         new_stat = 0.0
@@ -717,9 +709,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Component labels.
         """
         check_is_fitted(self, "converged_")
-        X = check_array(X, ensure_min_samples=4, allow_nd=True)
-        self._check_n_features(X)
-        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
+        X = check_array(X, ensure_min_samples=4, ensure_min_features=self.dim_x)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         muh_out = None
         for traj in traj_list:
@@ -730,7 +721,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 muh_out = np.hstack((muh_out, muh[:, self.dim_h :]))
         return muh_out
 
-    def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3, basis=GLE_BasisTransform()):
+    def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3):
         """Generate random samples from the fitted GLE model.
 
         Use the provided basis to compute the force term. The basis should be fitted first, if not will be fitted using a dummy trajectory.
@@ -743,8 +734,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Number of trajectory to generate
         x0,v0 : array-like, optionnal
             Initial value of the trajectory
-        basis: object
-            Basis object to evaluate the function basis
 
         Returns
         -------
@@ -757,11 +746,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         random_state = check_random_state(self.random_state)
         self.dt = dt
-        if not hasattr(basis, "fitted_"):  # Setup the basis if needed
-            dummytraj = np.zeros((3, 1 + 2 * self.dim_x))
-            basis.fit(dummytraj)
-        self.dim_coeffs_force = basis.nb_basis_elt_
-
         self._check_initial_parameters()
         if not (self.warm_start or hasattr(self, "converged_")):
             self._initialize_parameters(random_state, traj_len=n_samples)
@@ -776,7 +760,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X_h = None
 
         for n in range(n_trajs):
-            txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=basis, rng=random_state)
+            txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=self.basis, rng=random_state)
 
             if X is None:
                 X = txv
@@ -793,9 +777,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def get_coefficients(self):
         """Return the actual values of the fitted coefficients."""
         A, C = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
-        return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs, "dt": self.dt}
+        return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs, "dt": self.dt, "basis": self.basis.get_coefficients()}
 
-    def set_coefficients(self, coeffs):
+    def set_coefficients(self, coeffs, with_basis=True):
         """Set the value of the coefficients
 
         Parameters
@@ -805,6 +789,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(coeffs["A"]), np.asarray(coeffs["C"]), self.dt)
         (self.force_coeffs, self.mu0, self.sig0) = (coeffs["force"], coeffs["µ_0"], coeffs["Σ_0"])
+        if with_basis:
+            self.basis.set_coefficients(coeffs["basis"])
 
     def vectorization_coefficients(self):
         """

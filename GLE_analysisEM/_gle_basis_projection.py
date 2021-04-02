@@ -63,18 +63,70 @@ class BSplineFeatures(TransformerMixin):
     def fit(self, X, y=None):
         # TODO determine position of knots given the datas
         knots = np.linspace(np.min(X), np.max(X), self.n_knots)
-        self.bsplines = _get_bspline_basis(knots, self.degree, periodic=self.periodic)
-        self.nsplines = len(self.bsplines)
+        self.bsplines_ = _get_bspline_basis(knots, self.degree, periodic=self.periodic)
+        self.nsplines_ = len(self.bsplines_)
         return self
 
     def transform(self, X):
         nsamples, nfeatures = X.shape
-        features = np.zeros((nsamples, nfeatures * self.nsplines))
-        for ispline, spline in enumerate(self.bsplines):
+        features = np.zeros((nsamples, nfeatures * self.nsplines_))
+        for ispline, spline in enumerate(self.bsplines_):
             istart = ispline * nfeatures
             iend = (ispline + 1) * nfeatures
             features[:, istart:iend] = scipy.interpolate.splev(X, spline)
         return features
+
+    def _get_fitted(self):
+        """
+        Get fitted parameters
+        """
+        return {"bsplines": self.bsplines_}
+
+    def _set_fitted(self, fitted_dict):
+        """
+        Set fitted parameters
+        """
+        self.bsplines_ = fitted_dict["bsplines"]
+        self.nsplines_ = len(self.bsplines_)
+
+
+class BinsFeatures(KBinsDiscretizer):
+    def __init__(self, n_bins_arg, strategy):
+        """
+        Init class
+        """
+        super().__init__(encode="onehot-dense", strategy=strategy)
+        self.n_bins_arg = n_bins_arg
+
+    def fit(self, X, y=None):
+        """
+        Determine bin number
+        """
+        if self.n_bins_arg == "auto":  # Automatique determination of the number of bins via maximum of sturges and freedman diaconis rules
+            # Sturges rules
+            self.n_bins = 1 + np.log2(X.shape[0])
+            for d in range(self.dim_x):
+                # Freedman–Diaconis rule
+                n_bins = max(self.n_bins, freedman_diaconis(X[:, d]))
+            self.n_bins = int(n_bins)
+        elif isinstance(self.n_bins_arg, int):
+            self.n_bins = self.n_bins_arg
+        else:
+            raise ValueError("The number of bins must be an integer")
+        return super().fit(X, y)
+
+    def _get_fitted(self):
+        """
+        Get fitted parameters
+        """
+        return {"n_bins": self.n_bins_, "bin_edges": self.bin_edges_}
+
+    def _set_fitted(self, fitted_dict):
+        """
+        Set fitted parameters
+        """
+        self.n_bins_ = fitted_dict["n_bins"]
+        self.bin_edges_ = fitted_dict["bin_edges_"]
 
 
 class LinearElement(object):
@@ -125,6 +177,11 @@ class FEM1DFeatures(TransformerMixin):
         return features
 
 
+# Mainly useful for pickling
+def linear_fct(x):
+    return x
+
+
 class GLE_BasisTransform(TransformerMixin, BaseEstimator):
     """A transformer that give values of the basis along the trajectories.
 
@@ -154,25 +211,54 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         The type of the basis.
     """
 
-    def __init__(self, model="euler", basis_type="linear", transformer=None, **kwargs):
+    def __init__(self, basis_type="linear", transformer=None, **kwargs):
 
-        self.model = model
         self.basis_type = basis_type
         self.featuresTransformer = transformer
         self.kwargs = kwargs
 
-    def project_data(self, X):
+    def _initialize(self):
         """
-        Project the datas according to the model to return position at evaluation point
+        Initialize th class
         """
-        dt = X[1, 0] - X[0, 0]
-        if "aboba" in self.model:
-            x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-        elif "euler" in self.model:
-            x_pos = X[:, 1 : 1 + self.dim_x]
+        self.basis_type = self.basis_type.casefold()
+
+        self.to_combine_ = False
+        if self.featuresTransformer is None:
+            if self.basis_type == "linear":
+                self.featuresTransformer = FunctionTransformer(linear_fct, validate=False)
+
+            elif self.basis_type == "polynomial":
+                degree = self.kwargs.get("degree", 3)
+                if degree < 0:
+                    raise ValueError("The number of basis element must be positive")
+                self.featuresTransformer = PolynomialFeatures(degree=degree)
+
+            elif self.basis_type == "bins":
+                strategy = self.kwargs.get("strategy", "uniform")
+                n_bins_arg = self.kwargs.get("n_bins", "auto")  # n_bins should be a number, we cannot have different number of bins for different direction
+
+                self.featuresTransformer = BinsFeatures(n_bins_arg=n_bins_arg, strategy=strategy)  # TODO use sparse array
+                self.to_combine_ = True and (not self.dim_x == 1)  # No need for combinaison if only one dimensionnal datas
+
+            elif self.basis_type == "bsplines":
+                n_knots = self.kwargs.get("n_knots", 5)
+                degree = self.kwargs.get("degree", 3)
+                periodic = self.kwargs.get("periodic", False)
+                self.featuresTransformer = BSplineFeatures(n_knots, degree=degree, periodic=periodic)
+                self.to_combine_ = True and (not self.dim_x == 1)
+
+            elif self.basis_type == "custom":
+                raise ValueError("No transformer have been passed as argument for custom transformer")
+            else:
+                raise ValueError("The basis type {} is not implemented.".format(self.basis_type))
         else:
-            x_pos = X[:, 1 : 1 + self.dim_x]
-        return x_pos
+            self.featuresTransformer = self.featuresTransformer
+
+        if self.to_combine_:  # If it is needed to combine the features
+            self.combinations = _combinations(self.nb_basis_elt_per_dim, self.dim_x, False, False)
+            self.ncomb_ = sum(1 for _ in combinations)
+            self.nb_basis_elt_ = self.nb_basis_elt_per_dim ** self.dim_x
 
     def fit(self, X, y=None):
         """A reference implementation of a fitting function for a transformer.
@@ -195,66 +281,24 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         """
         # Input validation
         X = check_array(X)
+        self.dim_x = X.shape[1]
 
-        self.model = self.model.casefold()
-        self.basis_type = self.basis_type.casefold()
+        self._initialize()
 
-        self.dim_x = (X.shape[1] - 1) // 2
+        self.featuresTransformer = self.featuresTransformer.fit(X)
 
-        X = self.project_data(X)
+        if self.basis_type == "linear":
+            self.nb_basis_elt_ = self.dim_x
+        elif self.basis_type == "polynomial":
+            self.nb_basis_elt_ = self.featuresTransformer.n_output_features_
 
-        self.to_combine_ = False
-        if self.featuresTransformer is None:
-            if self.basis_type == "linear":
-                self.featuresTransformer = FunctionTransformer(lambda x: x, validate=False).fit(X)
-                self.nb_basis_elt_ = self.dim_x
-
-            elif self.basis_type == "polynomial":
-                degree = self.kwargs.get("degree", 3)
-                if degree < 0:
-                    raise ValueError("The number of basis element must be positive")
-                self.featuresTransformer = PolynomialFeatures(degree=degree).fit(X)
-                self.nb_basis_elt_ = self.featuresTransformer.n_output_features_
-
-            elif self.basis_type == "bins":
-                strategy = self.kwargs.get("strategy", "uniform")
-                n_bins_arg = self.kwargs.get("n_bins", "auto")  # n_bins should be a number, we cannot have different number of bins for different direction
-                if n_bins_arg == "auto":  # Automatique determination of the number of bins via maximum of sturges and freedman diaconis rules
-                    # Sturges rules
-                    n_bins = 1 + np.log2(X.shape[0])
-                    for d in range(self.dim_x):
-                        # Freedman–Diaconis rule
-                        n_bins = max(n_bins, freedman_diaconis(X[:, d]))
-                    n_bins = int(n_bins)
-                elif isinstance(n_bins_arg, int):
-                    n_bins = n_bins_arg
-                else:
-                    raise ValueError("The number of bins must be an integer")
-
-                self.featuresTransformer = KBinsDiscretizer(n_bins=n_bins, encode="onehot-dense", strategy=strategy).fit(X)  # TODO use sparse array
-                self.to_combine_ = True and (not self.dim_x == 1)  # No need for combinaison if only one dimensionnal datas
-                self.nb_basis_elt_ = n_bins
-
-            elif self.basis_type == "bsplines":
-                n_knots = self.kwargs.get("n_knots", 5)
-                degree = self.kwargs.get("degree", 3)
-                periodic = self.kwargs.get("periodic", False)
-                self.featuresTransformer = BSplineFeatures(n_knots, degree=degree, periodic=periodic).fit(X)
-                self.to_combine_ = True and (not self.dim_x == 1)
-                self.nb_basis_elt_ = self.featuresTransformer.nsplines
-
-            elif self.basis_type == "custom":
-                raise ValueError("No transformer have been passed as argument for custom transformer")
-            else:
-                raise ValueError("The basis type {} is not implemented.".format(self.basis_type))
+        elif self.basis_type == "bins":
+            self.nb_basis_elt_ = self.featuresTransformer.n_bins_
+        elif self.basis_type == "bsplines":
+            self.nb_basis_elt_ = self.featuresTransformer.nsplines
         else:
-            self.featuresTransformer = self.featuresTransformer.fit(X)
             self.nb_basis_elt_ = self.dim_x
 
-        if self.to_combine_:  # If it is needed to combine the features
-            self.combinations = _combinations(self.nb_basis_elt_per_dim, self.dim_x, False, False)
-            self.ncomb_ = sum(1 for _ in combinations)
-            self.nb_basis_elt_ = self.nb_basis_elt_per_dim ** self.dim_x
         self.fitted_ = True
         return self
 
@@ -305,7 +349,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
 
     def transform(self, X):
         """A reference implementation of a transform function.
-        Take the x_{1/2} as input and output basis expansion
+        Take the position as input and output basis expansion
 
         Parameters
         ----------
@@ -321,35 +365,36 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         check_is_fitted(self, "fitted_")
 
         # Input validation
-        X = check_array(X, ensure_min_samples=3)
-        x_pos = self.project_data(X)
-        n_samples, n_features = x_pos.shape
+        X = check_array(X)
+        n_samples, n_features = X.shape
 
         if n_features != self.dim_x:
             raise ValueError("X shape does not match training shape")
-        bk = self.featuresTransformer.transform(x_pos)
+        bk = self.featuresTransformer.transform(X)
 
         if self.to_combine_:
             bk = self.combine(bk)
-        return np.hstack((X, bk))
+        return bk
 
-    def predict(self, X):
-        """Predict the values of the force basis for the data samples in X using trained model.
-
-        Parameters
-        ----------
-        X : array-like, shape (n_samples, n_features)
-            List of n_features-dimensional data points. Each row
-            corresponds to a single data point.
-
-        Returns
-        -------
-        labels : array, shape (n_samples,)
-            Component labels.
+    def get_coefficients(self):
         """
-        # Check is fit had been called
-        check_is_fitted(self, "fitted_")
-        y = self.featuresTransformer.transform(X)
-        if self.to_combine_:
-            y = self.combine(y)
-        return y
+        Save fitted coefficients
+        """
+        params = self.get_params()
+        params.update({"dim_x": self.dim_x, "nb_basis_elt": self.nb_basis_elt_})
+        params.update(self.kwargs)
+        if hasattr(self.featuresTransformer, "_get_fitted"):
+            params.update(self.featuresTransformer._get_fitted())
+        return params
+
+    def set_coefficients(self, params):
+        """
+        Set fitted coefficients
+        """
+        self.set_params(**{k: params[k] for k in ("basis_type", "transformer", "kwargs") if k in params})
+        self.dim_x = params["dim_x"]
+        self._initialize()
+        if hasattr(self.featuresTransformer, "_set_fitted"):
+            self.featuresTransformer._set_fitted(params)
+        self.nb_basis_elt_ = params["nb_basis_elt"]
+        self.fitted_ = True

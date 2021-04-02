@@ -24,16 +24,15 @@ C = np.identity(dim_x + dim_h)
 # ------ Generation ------#
 pot_gen = GLE_BasisTransform(basis_type="linear")
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="user", A_init=A, C_init=C, model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=10000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, basis=pot_gen, EnforceFDT=False, force_init=force, init_params="user", A_init=A, C_init=C, model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=10000, n_trajs=25, x0=0.0, v0=0.0)
 print(generator.get_coefficients())
 inits_coeffs = generator.get_coefficients()
 inits_coeffs_reset = copy.deepcopy(inits_coeffs)
 
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
-X = basis.fit_transform(X)
-estimator = GLE_Estimator(verbose=2, verbose_interval=10, init_params="user", dim_x=dim_x, dim_h=dim_h, model=model, n_init=1, EnforceFDT=False, random_state=None, tol=1e-3, no_stop=False)
+estimator = GLE_Estimator(verbose=2, verbose_interval=10, init_params="user", dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, n_init=1, EnforceFDT=False, random_state=None, tol=1e-3, no_stop=False)
 estimator.set_init_coeffs(generator.get_coefficients())
 estimator.dt = generator.dt
 estimator._initialize_parameters(random_state=None)

@@ -38,16 +38,15 @@ A = np.array([[5e-2, -1.0], [1.0, 0.1]])
 pot_gen = GLE_BasisTransform(basis_type="linear")
 pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, force_init=force, EnforceFDT=True, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, basis=pot_gen, force_init=force, EnforceFDT=True, init_params="random", model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0)
 print(generator.get_coefficients())
 
 
 # ------ Estimation ------#
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
-X = basis.fit_transform(X)
-estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, n_init=3, EnforceFDT=False, OptimizeForce=True, random_state=7, tol=1e-7, no_stop=False, max_iter=300)
+estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, n_init=3, EnforceFDT=False, OptimizeForce=True, random_state=7, tol=1e-7, no_stop=False, max_iter=300)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 print("---- Real ones ----")
@@ -96,12 +95,12 @@ axs[1, 1].scatter(np.real(mem_ev_true), np.imag(mem_ev_true), label="Ev true")
 # axs[1, 1].set_aspect(1)
 
 
-def simulated_vacf(estimator, basis):
+def simulated_vacf(estimator):
     """
     Get vacf via numericall simulation of the model
     """
     Ntrajs = 50
-    X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs, basis=basis)
+    X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs)
     traj_list = np.split(X, idx)
     vacf = 0.0
     for n, trj in enumerate(traj_list):
@@ -118,7 +117,7 @@ for n, trj in enumerate(traj_list):
     vacf_num += correlation(trj[:, 2])
     time = trj[:, 0]
 vacf_num /= vacf_num[0]
-time_sim, vacf_sim = simulated_vacf(estimator, basis)
+time_sim, vacf_sim = simulated_vacf(estimator)
 axs[1, 0].plot(time[: len(time_sim) // 2], vacf_sim, label="Fitted VACF")
 axs[1, 0].set_title("Velocity autocorrelation function")
 axs[1, 0].plot(time[: len(time) // 2], vacf_num, label="Numerical VACF")

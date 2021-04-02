@@ -97,9 +97,7 @@ class Markov_Estimator(GLE_Estimator):
         self.dt = X[1, 0] - X[0, 0]
         self._check_initial_parameters()
 
-        self._check_n_features(X)
-
-        Xproc, idx_trajs = self.model_class.preprocessingTraj(X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         _min_traj_len = np.min([trj.shape[0] for trj in traj_list])
         # print(traj_list)

@@ -28,26 +28,28 @@ model = "euler_fv"
 force = -np.identity(dim_x)
 max_iter = 200
 
-ntrajs = 150
+ntrajs = 25
 
-basis = GLE_BasisTransform(basis_type="linear", model=model)
+pot_gen = GLE_BasisTransform(basis_type="linear")
 
 # Trajectory generation
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="user", model=model, random_state=random_state, A_init=[[5, 1.0], [-2.0, 0.07]])
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0, basis=basis)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="user", model=model, basis=pot_gen, random_state=random_state, A_init=[[5, 1.0], [-2.0, 0.07]])
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0)
 print("Real parameters", generator.get_coefficients())
 
-X = basis.fit_transform(X)
 print("Initial ll", generator.score(X, idx_trajs=idx))
 
-
+basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
 # Trajectory estimation
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=32)
+estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, basis=basis, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=32)
 # We set some initial conditions, check for stability
 # estimator.set_init_coeffs(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)
 print(estimator.get_coefficients())
+np.savez("coeffs.npz", **estimator.get_coefficients())
 
+estimator.set_coefficients(generator.get_coefficients())
+print(estimator.get_coefficients())
 # plt.plot(estimator.logL[0], label="Log L")
 # plt.legend(loc="upper right")
 # plt.show()

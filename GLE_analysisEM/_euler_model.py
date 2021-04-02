@@ -29,11 +29,10 @@ class EulerModel(AbstractModel):
 
         return A, C
 
-    def preprocessingTraj(self, X, idx_trajs=[]):
+    def preprocessingTraj(self, basis, X, idx_trajs=[]):
         dt = X[1, 0] - X[0, 0]
-
         v = (np.roll(X[:, 1 : 1 + self.dim_x], -1, axis=0) - X[:, 1 : 1 + self.dim_x]) / dt
-        bk = X[:, 1 + 2 * self.dim_x :]
+        bk = basis.fit_transform(X[:, 1 : 1 + self.dim_x])
         v_plus = np.roll(v, -1, axis=0)
         Xtraj = np.hstack((v_plus, v, v, bk))
 
@@ -129,7 +128,7 @@ class EulerModel(AbstractModel):
 
     def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
         x_tp = x_t + dt * p_t
-        force_t = dt * np.matmul(force_coeffs, basis.predict(np.reshape(x_t, (1, -1)))[0])
+        force_t = dt * np.matmul(force_coeffs, basis.transform(np.reshape(x_t, (1, -1)))[0])
 
         h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]
         p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t + gauss[: self.dim_x]
@@ -239,7 +238,7 @@ class EulerNLModel(EulerModel):
 
     def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
         x_tp = x_t + dt * p_t
-        force_t = dt * np.matmul(force_coeffs, basis.predict(np.reshape(x_t, (1, -1)))[0])
+        force_t = dt * np.matmul(force_coeffs, basis.transform(np.reshape(x_t, (1, -1)))[0])
 
         h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss
         p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t

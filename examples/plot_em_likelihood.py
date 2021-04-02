@@ -9,7 +9,7 @@ Plot the likelihood increase after one EM step
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden
 
 # Printing options
 pd.set_option("display.max_rows", None)
@@ -30,27 +30,24 @@ to_plot_logL_true_param = np.zeros((nbTrajs, 3))
 to_plot_logL = np.zeros((nbTrajs, 4))
 
 basis = GLE_BasisTransform(basis_type="linear")
-generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=nbTrajs, x0=0.0, v0=0.0, basis=basis)
+generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, basis=basis, EnforceFDT=True, force_init=force, init_params="random", model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=nbTrajs, x0=0.0, v0=0.0)
 traj_list_h = np.split(Xh, idx)
-X = basis.fit_transform(X)
 
 # print(generator.get_coefficients())
 
 # An estimator that hold the  real parameter for comparaison
-true_est = GLE_Estimator(init_params="user", dim_x=dim_x, dim_h=dim_h, model=model)
+true_est = GLE_Estimator(init_params="user", dim_x=dim_x, dim_h=dim_h, model=model, basis=basis)
 true_est.set_init_coeffs(generator.get_coefficients())
 true_est.dt = X[1, 0] - X[0, 0]
 true_est._check_initial_parameters()
-true_est._check_n_features(X)
 true_est._initialize_parameters(random_state=random_state)
 
-est = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, OptimizeDiffusion=True)
+est = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, model=model, OptimizeDiffusion=True, basis=basis)
 est.set_init_coeffs(generator.get_coefficients())
 est.dt = X[1, 0] - X[0, 0]
 est._check_initial_parameters()
-est._check_n_features(X)
-Xproc, idx = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x, model=model)
+Xproc, idx = est.model_class.preprocessingTraj(est.basis, X, idx_trajs=idx)
 traj_list = np.split(Xproc, idx)
 
 
@@ -60,11 +57,11 @@ for n, traj in enumerate(traj_list):
     zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
     muh = np.hstack((np.roll(traj_list_h[n][:-1, :], -1, axis=0), traj_list_h[n][:-1, :]))
     print("True")
+    est._initialize_parameters(random_state=random_state)
     datas_true = sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force)
 
     to_plot_logL_true_true[n, 0] = true_est.loglikelihood(datas_true)  # The true likelihood of the true datas
 
-    est._initialize_parameters(random_state=random_state)
     to_plot_logL_true_datas[n, 0] = est.loglikelihood(datas_true)  # The initial likelihood on the true datas
 
     # A first EM step

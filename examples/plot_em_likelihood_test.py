@@ -10,7 +10,7 @@ import numpy as np
 
 # import pandas as pd
 from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden
 
 # Printing options
 # pd.set_option("display.max_rows", None)
@@ -29,13 +29,12 @@ C = np.identity(dim_x + dim_h)
 # ------ Generation ------#
 pot_gen = GLE_BasisTransform(basis_type="linear")
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, force_init=force, init_params="user", A_init=A, C_init=C, model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=10000, n_trajs=25, x0=0.0, v0=0.0, basis=pot_gen)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, basis=pot_gen, EnforceFDT=False, force_init=force, init_params="user", A_init=A, C_init=C, model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=10000, n_trajs=25, x0=0.0, v0=0.0)
 print(generator.get_coefficients())
 # ------ Estimation ------#
 basis = GLE_BasisTransform(basis_type="linear")
-X = basis.fit_transform(X)
-est = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, n_init=5, EnforceFDT=False, OptimizeDiffusion=False, random_state=42, tol=1e-3, no_stop=True, max_iter=100)
+est = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=1, model=model, basis=basis, n_init=5, EnforceFDT=False, OptimizeDiffusion=False, random_state=42, tol=1e-3, no_stop=True, max_iter=100)
 
 # dim_x = 1
 # dim_h = 1
@@ -55,8 +54,7 @@ traj_list_h = np.split(Xh, idx)
 est.dt = X[1, 0] - X[0, 0]
 
 est._check_initial_parameters()
-est._check_n_features(X)
-Xproc, idx = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x, model=model)
+Xproc, idx = est.model_class.preprocessingTraj(est.basis, X, idx_trajs=idx)
 traj_list = np.split(Xproc, idx)
 est._initialize_parameters(random_state=est.random_state)
 print(est.get_coefficients())

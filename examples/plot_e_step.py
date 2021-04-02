@@ -8,13 +8,13 @@ Inner working of the E step :class:`GLE_analysisEM.GLE_Estimator`
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden, preprocessingTraj
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden
 
 # Printing options
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
-pd.set_option("display.max_colwidth", None)
+pd.set_option("display.max_colwidth", -1)
 
 dim_x = 1
 dim_h = 1
@@ -25,8 +25,8 @@ force = -np.identity(dim_x)
 A = [[5, 1.0], [-1.0, 2.07]]
 C = np.identity(dim_x + dim_h)  #
 basis = GLE_BasisTransform(basis_type="linear")
-generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, EnforceFDT=False, C_init=C, force_init=force, init_params="random", model=model, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=10000, n_trajs=100, x0=0.0, v0=0.0, basis=basis)
+generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, basis=basis, EnforceFDT=False, C_init=C, force_init=force, init_params="random", model=model, random_state=random_state)
+X, idx, Xh = generator.sample(n_samples=10000, n_trajs=10, x0=0.0, v0=0.0)
 traj_list_h = np.split(Xh, idx)
 time = np.split(X, idx)[0][:, 0]
 for n, traj in enumerate(traj_list_h):
@@ -34,17 +34,14 @@ for n, traj in enumerate(traj_list_h):
 
 print(generator.get_coefficients())
 
-X = basis.fit_transform(X)
-
-est = GLE_Estimator(init_params="user", dim_x=dim_x, dim_h=dim_h, model=model)
+est = GLE_Estimator(init_params="user", dim_x=dim_x, dim_h=dim_h, model=model, basis=basis)
 est.set_init_coeffs(generator.get_coefficients())
 est.dt = time[1] - time[0]
 est._check_initial_parameters()
 
-
-est._check_n_features(X)
-Xproc, idx = preprocessingTraj(X, idx_trajs=idx, dim_x=est.dim_x, model=model)
+Xproc, idx = est.model_class.preprocessingTraj(est.basis, X, idx_trajs=idx)
 traj_list = np.split(Xproc, idx)
+est.dim_coeffs_force = est.basis.nb_basis_elt_
 #
 # # Check velocity computation
 # for n in range(dim_x):

@@ -355,7 +355,7 @@ def forcefield(x_lims, basis, force_coeffs):
         X = np.vstack((x.flatten(), y.flatten(), z.flatten(), c.flatten())).T
     elif x_lims.shape[0] > 4:
         raise NotImplementedError("Dimension higher than 3 are not implemented")
-    force_field = np.matmul(force_coeffs, basis.predict(X).T).T
+    force_field = np.matmul(force_coeffs, basis.transform(X).T).T
     return np.hstack((X, force_field))
 
 
@@ -379,7 +379,7 @@ def forcefield_plot2D(x_lims, basis, force_coeffs):
     y_coords = np.linspace(x_lims[1][0], x_lims[1][1], x_lims[1][2])
     x, y = np.meshgrid(x_coords, y_coords)
     X = np.vstack((x.flatten(), y.flatten())).T
-    force_field = np.matmul(force_coeffs, basis.predict(X).T).T
+    force_field = np.matmul(force_coeffs, basis.transform(X).T).T
     f = force_field.reshape(x_lims[0][2], x_lims[1][2], 2)
     return x, y, f[:, :, 0], f[:, :, 1]
 
