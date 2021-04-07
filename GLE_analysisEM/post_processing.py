@@ -45,6 +45,21 @@ def memory_timescales(coeffs, dim_x):
     return np.linalg.eigvals(coeffs["A"][dim_x:, dim_x:])
 
 
+def prony_splitting(coeffs, dim_x):
+    """
+    Compute the Kernel under prony series form
+    """
+    Ahv = coeffs["A"][dim_x:, :dim_x]
+    Avh = coeffs["A"][:dim_x, dim_x:]
+    eigs, right_vect = np.linalg.eig(coeffs["A"][dim_x:, dim_x:])
+    right_coeffs = np.linalg.inv(right_vect) @ Ahv
+    left_coeffs = Avh @ right_vect
+    # print(right_coeffs)
+    # print(left_coeffs)
+    a_est = left_coeffs[0, :] * right_coeffs[:, 0]
+    return -1 * np.real(a_est), -1 * eigs, -1 * np.imag(a_est)
+
+
 def prony(t, F, m):
     """Input  : real arrays t, F of the same size (ti, Fi): integer m - the number of modes in the exponential fit
     Output : arrays a and b such that F(t) ~ sum ai exp(bi*t)
@@ -53,18 +68,18 @@ def prony(t, F, m):
     # Solve LLS problem in step 1
     # Amat is (N-m)*m and bmat is N-m*1
     N = len(t)
-    Amat = np.zeros((N - m, m))
+    Amat = np.zeros((N - m, m), dtype=np.complex)
     bmat = F[m:N]
 
     for jcol in range(m):
         Amat[:, jcol] = F[m - jcol - 1 : N - 1 - jcol]
 
-    sol = np.linalg.lstsq(Amat, bmat)
+    sol = np.linalg.lstsq(Amat, bmat, rcond=None)
     d = sol[0]
 
     # Solve the roots of the polynomial in step 2
     # first, form the polynomial coefficients
-    c = np.zeros(m + 1)
+    c = np.zeros(m + 1, dtype=np.complex)
     c[m] = 1.0
     for i in range(1, m + 1):
         c[m - i] = -d[i - 1]
@@ -73,25 +88,25 @@ def prony(t, F, m):
     b_est = np.log(u) / (t[1] - t[0])
 
     # Set up LLS problem to find the "a"s in step 3
-    Amat = np.zeros((N, m))
+    Amat = np.zeros((N, m), dtype=np.complex)
     bmat = F
 
     for irow in range(N):
         Amat[irow, :] = u ** irow
 
-    sol = np.linalg.lstsq(Amat, bmat)
+    sol = np.linalg.lstsq(Amat, bmat, rcond=None)
     a_est = sol[0]
 
-    return a_est, b_est
+    return np.real(a_est), b_est, np.imag(a_est)
 
 
-def prony_eval(t, a, b):
+def prony_eval(t, a, b, c):
     """
     Evaluate a prony series for each point in t
     """
     series = np.zeros_like(t, dtype=np.complex)
     for i, a in enumerate(a):
-        series += a[i] * np.exp(b[i] * t)
+        series += (a[i] + 1j * c[i]) * np.exp(b[i] * t)
     return np.real(series)
 
 

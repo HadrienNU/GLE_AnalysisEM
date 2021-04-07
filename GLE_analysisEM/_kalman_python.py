@@ -2,9 +2,6 @@
 Somes utilities function
 """
 import numpy as np
-import scipy.linalg
-from sklearn.model_selection import ShuffleSplit
-from sklearn.utils import resample
 
 
 def filter_kalman(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h):
