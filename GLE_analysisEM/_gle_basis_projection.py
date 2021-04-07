@@ -102,10 +102,11 @@ class BinsFeatures(KBinsDiscretizer):
         """
         Determine bin number
         """
+        nsamples, dim_x = X.shape
         if self.n_bins_arg == "auto":  # Automatique determination of the number of bins via maximum of sturges and freedman diaconis rules
             # Sturges rules
-            self.n_bins = 1 + np.log2(X.shape[0])
-            for d in range(self.dim_x):
+            self.n_bins = 1 + np.log2(nsamples)
+            for d in range(dim_x):
                 # Freedman–Diaconis rule
                 n_bins = max(self.n_bins, freedman_diaconis(X[:, d]))
             self.n_bins = int(n_bins)
@@ -119,14 +120,14 @@ class BinsFeatures(KBinsDiscretizer):
         """
         Get fitted parameters
         """
-        return {"n_bins": self.n_bins_, "bin_edges": self.bin_edges_}
+        return {"n_bins": self.n_bins, "bin_edges": self.bin_edges_}
 
     def _set_fitted(self, fitted_dict):
         """
         Set fitted parameters
         """
-        self.n_bins_ = fitted_dict["n_bins"]
-        self.bin_edges_ = fitted_dict["bin_edges_"]
+        self.n_bins = fitted_dict["n_bins"]
+        self.bin_edges_ = fitted_dict["bin_edges"]
 
 
 class LinearElement(object):
@@ -214,7 +215,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
     def __init__(self, basis_type="linear", transformer=None, **kwargs):
 
         self.basis_type = basis_type
-        self.featuresTransformer = transformer
+        self.transformer = transformer
         self.kwargs = kwargs
 
     def _initialize(self):
@@ -224,7 +225,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         self.basis_type = self.basis_type.casefold()
 
         self.to_combine_ = False
-        if self.featuresTransformer is None:
+        if self.transformer is None:
             if self.basis_type == "linear":
                 self.featuresTransformer = FunctionTransformer(linear_fct, validate=False)
 
@@ -253,12 +254,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             else:
                 raise ValueError("The basis type {} is not implemented.".format(self.basis_type))
         else:
-            self.featuresTransformer = self.featuresTransformer
-
-        if self.to_combine_:  # If it is needed to combine the features
-            self.combinations = _combinations(self.nb_basis_elt_per_dim, self.dim_x, False, False)
-            self.ncomb_ = sum(1 for _ in combinations)
-            self.nb_basis_elt_ = self.nb_basis_elt_per_dim ** self.dim_x
+            self.featuresTransformer = self.transformer
 
     def fit(self, X, y=None):
         """A reference implementation of a fitting function for a transformer.
@@ -293,11 +289,16 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             self.nb_basis_elt_ = self.featuresTransformer.n_output_features_
 
         elif self.basis_type == "bins":
-            self.nb_basis_elt_ = self.featuresTransformer.n_bins_
+            self.nb_basis_elt_ = self.featuresTransformer.n_bins
         elif self.basis_type == "bsplines":
             self.nb_basis_elt_ = self.featuresTransformer.nsplines_
         else:
             self.nb_basis_elt_ = self.dim_x
+
+        if self.to_combine_:  # If it is needed to combine the features
+            self.combinations = _combinations(self.nb_basis_elt_per_dim, self.dim_x, False, False)
+            self.ncomb_ = sum(1 for _ in combinations)
+            self.nb_basis_elt_ = self.nb_basis_elt_per_dim ** self.dim_x
 
         self.fitted_ = True
         return self
