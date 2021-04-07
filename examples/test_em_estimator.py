@@ -39,7 +39,7 @@ print("Real parameters", generator.get_coefficients())
 
 print("Initial ll", generator.score(X, idx_trajs=idx))
 
-basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
+basis = GLE_BasisTransform(basis_type="bins", bins="auto")
 # Trajectory estimation
 estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, basis=basis, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=32)
 # We set some initial conditions, check for stability
