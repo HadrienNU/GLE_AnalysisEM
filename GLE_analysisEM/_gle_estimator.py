@@ -13,7 +13,8 @@ from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.neighbors import KDTree
 
-from .utils import generateRandomDefPosMat, correlation
+from .random_matrix import generateRandomDefPosMat
+from .post_processing import correlation
 from ._aboba_model import ABOBAModel
 from ._euler_model import EulerModel, EulerNLModel, EulerFixMarkovModel, EulerForceVisibleModel
 
