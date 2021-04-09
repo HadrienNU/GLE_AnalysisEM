@@ -13,6 +13,7 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_array
 from sklearn.preprocessing import PolynomialFeatures, KBinsDiscretizer, FunctionTransformer
 from sklearn.neighbors import KDTree
+from sklearn.linear_model import LinearRegression
 
 
 def freedman_diaconis(data):
@@ -376,6 +377,30 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         if self.to_combine_:
             bk = self.combine(bk)
         return bk
+
+    def orthogonal_projection(self, X, y=None):
+        """
+        Get coefficients of the affine projection on the basis
+        Parameters
+        ----------
+        X : {array-like, sparse-matrix}, shape (n_samples, n_features)
+            The input samples.
+        y : {array-like, sparse-matrix}, shape (n_samples, n_features)
+            Values at X of the function to project.
+        """
+        # Check is fit had been called
+        check_is_fitted(self, "fitted_")
+
+        # Input validation
+        X = check_array(X)
+        bk = self.transform(X)
+        if y is None:
+            y = X
+        # For future we can try to implement minibatch via SGDRegressor and partial_fit
+        print(bk)
+        print(y)
+        self.regr_ = LinearRegression(fit_intercept=False).fit(bk, y=y)  # regressor is saved for latter used if needed
+        return self.regr_.coef_.reshape(self.dim_x, -1)  # If this is a 1D array, that will becomes a 2D array
 
     def get_coefficients(self):
         """

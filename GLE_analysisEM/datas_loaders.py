@@ -101,22 +101,24 @@ def loadDatas_pos(paths, dim_x, maxlenght=None):
     return X, idx_trajs
 
 
-def cutTrajs(trj, n_cut):
+def cutTrajs(X, idx_trajs=[], n_cut=1):
     """
     Cut trajectory into smaller piece
     """
-    sub_trajs = np.array_split(trj, n_cut)
 
-    X = None
-    idx_trajs = []
-    for txv in sub_trajs:
-        if X is None:
-            X = txv
-        else:
-            idx_trajs.append(len(X))
-            X = np.vstack((X, txv))
+    X_cut = None
+    idx_cut = []
+    traj_list = np.split(X, idx_trajs)
+    for trj in traj_list:
+        sub_trajs = np.array_split(trj, n_cut)
+        for txv in sub_trajs:
+            if X is None:
+                X_cut = txv
+            else:
+                idx_cut.append(len(X))
+                X_cut = np.vstack((X_cut, txv))
 
-    return X, idx_trajs
+    return X_cut, idx_cut
 
 
 def split_loadDatas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, random_state=None):
