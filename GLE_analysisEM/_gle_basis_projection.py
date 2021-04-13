@@ -179,6 +179,37 @@ class FEM1DFeatures(TransformerMixin):
         return features
 
 
+class LinearFeatures(TransformerMixin):
+    def __init__(self, to_center=False):
+        """
+        """
+        self.centered = to_center
+
+    def fit(self, X, y=None):
+        self.n_output_features_ = X.shape[1]
+        if self.centered:
+            self.mean_ = np.mean(X, axis=0)
+        else:
+            self.mean_ = np.zeros((self.n_output_features_,))
+        return self
+
+    def transform(self, X):
+        return X - self.mean_
+
+    def _get_fitted(self):
+        """
+        Get fitted parameters
+        """
+        return {"mean": self.mean_, "n_output_features": self.n_output_features_}
+
+    def _set_fitted(self, fitted_dict):
+        """
+        Set fitted parameters
+        """
+        self.mean_ = fitted_dict["mean"]
+        self.n_output_features_ = fitted_dict["n_output_features"]
+
+
 # Mainly useful for pickling
 def linear_fct(x):
     return x
@@ -228,7 +259,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         self.to_combine_ = False
         if self.transformer is None:
             if self.basis_type == "linear":
-                self.featuresTransformer = FunctionTransformer(linear_fct, validate=False)
+                self.featuresTransformer = LinearFeatures(to_center=self.kwargs.get("to_center", False))
 
             elif self.basis_type == "polynomial":
                 degree = self.kwargs.get("degree", 3)
@@ -285,7 +316,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         self.featuresTransformer = self.featuresTransformer.fit(X)
 
         if self.basis_type == "linear":
-            self.nb_basis_elt_ = self.dim_x
+            self.nb_basis_elt_ = self.featuresTransformer.n_output_features_
         elif self.basis_type == "polynomial":
             self.nb_basis_elt_ = self.featuresTransformer.n_output_features_
 

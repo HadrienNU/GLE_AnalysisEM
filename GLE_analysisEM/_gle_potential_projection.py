@@ -39,7 +39,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         The kernel of the KDE
     """
 
-    def __init__(self, dim_x=1, model="aboba", estimator="histogram", bins="auto", kernel="gaussian", bandwidth=1.0, per=False):
+    def __init__(self, dim_x=1, model="euler", estimator="histogram", bins="auto", kernel="gaussian", bandwidth=1.0, per=False):
 
         self.dim_x = dim_x
         self.model = model
