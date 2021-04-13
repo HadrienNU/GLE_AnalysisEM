@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_BasisTransform, GLE_Estimator, GLE_PotentialTransform
 
 from GLE_analysisEM import Markov_Estimator
-from GLE_analysisEM.utils import forcefield, forcefield_plot2D, correlation
+from GLE_analysisEM.post_processing import forcefield, forcefield_plot2D, correlation
 
 from sklearn.preprocessing import FunctionTransformer
 

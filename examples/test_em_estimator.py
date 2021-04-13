@@ -21,7 +21,7 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
-dim_x = 2
+dim_x = 1
 dim_h = 1
 random_state = 42
 model = "euler_fv"
@@ -39,13 +39,12 @@ print("Real parameters", generator.get_coefficients())
 
 print("Initial ll", generator.score(X, idx_trajs=idx))
 
-basis = GLE_BasisTransform(basis_type="linear", to_center=True)
+basis = GLE_BasisTransform(basis_type="free_energy")
 # Trajectory estimation
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, basis=basis, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=32)
+estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, basis=basis, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=8)
 # We set some initial conditions, check for stability
 # estimator.set_init_coeffs(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)
-print(basis.featuresTransformer.mean_)
 print(estimator.get_coefficients())
 # np.savez("coeffs.npz", **estimator.get_coefficients())
 

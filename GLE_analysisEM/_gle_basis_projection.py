@@ -5,213 +5,21 @@ import numpy as np
 from itertools import chain, combinations
 from itertools import combinations_with_replacement as combinations_w_r
 
-import scipy.interpolate
-import scipy.stats
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_array
-from sklearn.preprocessing import PolynomialFeatures, KBinsDiscretizer, FunctionTransformer
-from sklearn.neighbors import KDTree
+from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 
-
-def freedman_diaconis(data):
-    """
-    Use Freedman Diaconis rule to compute optimal histogram bin number.
-
-    Parameters
-    ----------
-    data: np.ndarray
-        One-dimensional array.
-    """
-    data = np.asarray(data, dtype=np.float_)
-    IQR = scipy.stats.iqr(data, rng=(25, 75), scale="raw", nan_policy="omit")
-    N = data.size
-    bw = (2 * IQR) / np.power(N, 1 / 3)
-
-    datmin, datmax = data.min(), data.max()
-    datrng = datmax - datmin
-    return int((datrng / bw) + 1)
+from ._gle_potential_projection import GLE_PotentialTransform
+from ._basis_features import LinearFeatures, BinsFeatures, BSplineFeatures
 
 
 def _combinations(n_features, degree, interaction_only, include_bias):
     comb = combinations if interaction_only else combinations_w_r
     start = int(not include_bias)
     return chain.from_iterable(comb(range(n_features), i) for i in range(start, degree + 1))
-
-
-def _get_bspline_basis(knots, degree=3, periodic=False):
-    """Get spline coefficients for each basis spline."""
-    nknots = len(knots)
-    y_dummy = np.zeros(nknots)
-
-    knots, coeffs, degree = scipy.interpolate.splrep(knots, y_dummy, k=degree, per=periodic)
-    ncoeffs = len(coeffs)
-    bsplines = []
-    for ispline in range(nknots):
-        coeffs = [1.0 if ispl == ispline else 0.0 for ispl in range(ncoeffs)]
-        bsplines.append((knots, coeffs, degree))
-    return bsplines
-
-
-class BSplineFeatures(TransformerMixin):
-    def __init__(self, n_knots=5, degree=3, periodic=False):
-        self.periodic = periodic
-        self.degree = degree
-        self.n_knots = n_knots  # knots are position along the axis of the knots
-
-    def fit(self, X, y=None):
-        # TODO determine position of knots given the datas
-        knots = np.linspace(np.min(X), np.max(X), self.n_knots)
-        self.bsplines_ = _get_bspline_basis(knots, self.degree, periodic=self.periodic)
-        self.nsplines_ = len(self.bsplines_)
-        return self
-
-    def transform(self, X):
-        nsamples, nfeatures = X.shape
-        features = np.zeros((nsamples, nfeatures * self.nsplines_))
-        for ispline, spline in enumerate(self.bsplines_):
-            istart = ispline * nfeatures
-            iend = (ispline + 1) * nfeatures
-            features[:, istart:iend] = scipy.interpolate.splev(X, spline)
-        return features
-
-    def _get_fitted(self):
-        """
-        Get fitted parameters
-        """
-        return {"bsplines": self.bsplines_}
-
-    def _set_fitted(self, fitted_dict):
-        """
-        Set fitted parameters
-        """
-        self.bsplines_ = fitted_dict["bsplines"]
-        self.nsplines_ = len(self.bsplines_)
-
-
-class BinsFeatures(KBinsDiscretizer):
-    def __init__(self, n_bins_arg, strategy):
-        """
-        Init class
-        """
-        super().__init__(encode="onehot-dense", strategy=strategy)
-        self.n_bins_arg = n_bins_arg
-
-    def fit(self, X, y=None):
-        """
-        Determine bin number
-        """
-        nsamples, dim_x = X.shape
-        if self.n_bins_arg == "auto":  # Automatique determination of the number of bins via maximum of sturges and freedman diaconis rules
-            # Sturges rules
-            self.n_bins = 1 + np.log2(nsamples)
-            for d in range(dim_x):
-                # Freedman–Diaconis rule
-                n_bins = max(self.n_bins, freedman_diaconis(X[:, d]))
-            self.n_bins = int(n_bins)
-        elif isinstance(self.n_bins_arg, int):
-            self.n_bins = self.n_bins_arg
-        else:
-            raise ValueError("The number of bins must be an integer")
-        return super().fit(X, y)
-
-    def _get_fitted(self):
-        """
-        Get fitted parameters
-        """
-        return {"n_bins": self.n_bins, "bin_edges": self.bin_edges_}
-
-    def _set_fitted(self, fitted_dict):
-        """
-        Set fitted parameters
-        """
-        self.n_bins = fitted_dict["n_bins"]
-        self.bin_edges_ = fitted_dict["bin_edges"]
-
-
-class LinearElement(object):
-    """1D element with linear basis functions.
-
-    Attributes:
-        index (int): Index of the element.
-        x_l (float): x-coordinate of the left boundary of the element.
-        x_r (float): x-coordinate of the right boundary of the element.
-    """
-
-    def __init__(self, index, x_left, x_center, x_right):
-        self.num_nodes = 2
-        self.index = index
-        self.x_left = x_left
-        self.x_center = x_center
-        self.x_right = x_right
-        self.center = np.asarray([0.5 * (self.x_right + self.x_left)])
-        self.size = 0.5 * (self.x_right - self.x_left)
-
-    def basis_function(self, x):
-        x = np.asarray(x)
-        return ((x >= self.x_left) & (x < self.x_center)) * (x - self.x_left) / (self.x_center - self.x_left) + ((x >= self.x_center) & (x < self.x_right)) * (self.x_right - x) / (self.x_right - self.x_center)
-
-
-class FEM1DFeatures(TransformerMixin):
-    def __init__(self, mesh, periodic=False):
-        self.periodic = periodic
-        # Add two point for start and end point
-        extra_point_start = 2 * mesh.x[0] - mesh.x[1]
-        extra_point_end = 2 * mesh.x[-1] - mesh.x[-2]
-        x_dat = np.concatenate((np.array([extra_point_start]), mesh.x, np.array([extra_point_end])))
-        # Create list of instances of Element
-        self.elements = [LinearElement(i, x_dat[i], x_dat[i + 1], x_dat[i + 2]) for i in range(len(x_dat) - 2)]
-        self.num_elements = len(self.elements)
-
-    def fit(self, X, y=None):
-        self.tree = KDTree(X)
-        return self
-
-    def transform(self, X):
-        nsamples, nfeatures = X.shape
-        features = np.zeros((nsamples, self.num_elements))
-        for k, element in enumerate(self.elements):
-            istart = k  # * nfeatures
-            iend = k + 1  # * nfeatures
-            features[:, istart:iend] = element.basis_function(X)
-        return features
-
-
-class LinearFeatures(TransformerMixin):
-    def __init__(self, to_center=False):
-        """
-        """
-        self.centered = to_center
-
-    def fit(self, X, y=None):
-        self.n_output_features_ = X.shape[1]
-        if self.centered:
-            self.mean_ = np.mean(X, axis=0)
-        else:
-            self.mean_ = np.zeros((self.n_output_features_,))
-        return self
-
-    def transform(self, X):
-        return X - self.mean_
-
-    def _get_fitted(self):
-        """
-        Get fitted parameters
-        """
-        return {"mean": self.mean_, "n_output_features": self.n_output_features_}
-
-    def _set_fitted(self, fitted_dict):
-        """
-        Set fitted parameters
-        """
-        if self.centered:
-            self.n_output_features_ = fitted_dict["n_output_features"]
-            if "mean" in fitted_dict:
-                self.mean_ = fitted_dict["mean"]
-            else:
-                self.mean_ = np.zeros((self.n_output_features_,))
 
 
 class GLE_BasisTransform(TransformerMixin, BaseEstimator):
@@ -251,7 +59,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
 
     def _initialize(self):
         """
-        Initialize th class
+        Initialize the feature class
         """
         self.basis_type = self.basis_type.casefold()
 
@@ -279,6 +87,12 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
                 periodic = self.kwargs.get("periodic", False)
                 self.featuresTransformer = BSplineFeatures(n_knots, degree=degree, periodic=periodic)
                 self.to_combine_ = True and (not self.dim_x == 1)
+
+            elif self.basis_type == "free_energy_kde":
+                self.featuresTransformer = GLE_PotentialTransform(estimator="kde", dim_x=self.dim_x, bandwidth=self.kwargs.get("bandwidth", 1e-3), per=self.kwargs.get("periodic", False))
+
+            elif self.basis_type == "free_energy_histogram" or self.basis_type == "free_energy":  # Default free energy set to histogram
+                self.featuresTransformer = GLE_PotentialTransform(estimator="histogram", dim_x=self.dim_x, bins=self.kwargs.get("bins", "auto"), per=self.kwargs.get("periodic", False))
 
             elif self.basis_type == "custom":
                 raise ValueError("No transformer have been passed as argument for custom transformer")
@@ -313,16 +127,8 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         self._initialize()
 
         self.featuresTransformer = self.featuresTransformer.fit(X)
-
-        if self.basis_type == "linear":
+        if hasattr(self.featuresTransformer, "n_output_features_"):
             self.nb_basis_elt_ = self.featuresTransformer.n_output_features_
-        elif self.basis_type == "polynomial":
-            self.nb_basis_elt_ = self.featuresTransformer.n_output_features_
-
-        elif self.basis_type == "bins":
-            self.nb_basis_elt_ = self.featuresTransformer.n_bins
-        elif self.basis_type == "bsplines":
-            self.nb_basis_elt_ = self.featuresTransformer.nsplines_
         else:
             self.nb_basis_elt_ = self.dim_x
 
@@ -403,7 +209,6 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         if n_features != self.dim_x:
             raise ValueError("X shape does not match training shape")
         bk = self.featuresTransformer.transform(X)
-
         if self.to_combine_:
             bk = self.combine(bk)
         return bk
@@ -427,8 +232,6 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         if y is None:
             y = X
         # For future we can try to implement minibatch via SGDRegressor and partial_fit
-        print(bk)
-        print(y)
         self.regr_ = LinearRegression(fit_intercept=False).fit(bk, y=y)  # regressor is saved for latter used if needed
         return self.regr_.coef_.reshape(self.dim_x, -1)  # If this is a 1D array, that will becomes a 2D array
 

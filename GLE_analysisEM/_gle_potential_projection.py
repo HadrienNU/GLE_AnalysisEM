@@ -19,9 +19,6 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
     dim_x : int, default=1
         The number of visible dimensions.
 
-    model : str, default= "aboba"
-        The statistical model to use
-
     estimator : str, default= "histogram"
         Give the wanted basis projection
         Must be one of::
@@ -39,10 +36,9 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         The kernel of the KDE
     """
 
-    def __init__(self, dim_x=1, model="euler", estimator="histogram", bins="auto", kernel="gaussian", bandwidth=1.0, per=False):
+    def __init__(self, dim_x=1, estimator="histogram", bins="auto", kernel="gaussian", bandwidth=1.0, per=False):
 
         self.dim_x = dim_x
-        self.model = model
         self.estimator = estimator
 
         self.per = per
@@ -51,14 +47,13 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
 
         self.kernel = kernel
         self.bandwidth = bandwidth
+        self.n_output_features_ = self.dim_x
 
     def _check_parameters(self):
         """Check the inputed parameter for the basis type"""
         self.estimator = self.estimator.casefold()
         if self.estimator not in ["histogram", "kde"]:
             raise ValueError("The estimator {} is not implemented.".format(self.estimator))
-
-        self.model = self.model.casefold()
 
     def fit(self, X, y=None):
         """A reference implementation of a fitting function for a transformer.
@@ -82,37 +77,36 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         # Input validation
         X = check_array(X, ensure_min_samples=2)
         self._check_parameters()  # Check that input parameters are coherent
-        dt = X[1, 0] - X[0, 0]
         # self.dim_x = (X.shape[1] - 1) // 2
         # print("DIM x", self.dim_x)
         self.n_output_features_ = self.dim_x
-        if self.model in ["aboba"]:
-            x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-        elif self.model in ["euler", "euler_noiseless"]:
-            x_pos = X[:, 1 : 1 + self.dim_x]
-        self.min_vals = np.amin(x_pos, axis=0)
-        self.max_vals = np.amax(x_pos, axis=0)
+
+        self.min_vals = np.amin(X, axis=0)
+        self.max_vals = np.amax(X, axis=0)
         if self.estimator == "histogram":
             if self.dim_x == 1:
-                fehist = np.histogram(x_pos, bins=self.bins)
+                fehist = np.histogram(X, bins=self.bins)
                 xfa = (fehist[1][1:] + fehist[1][:-1]) / 2.0
                 xf = xfa[np.nonzero(fehist[0])]
             else:
-                fehist = np.histogramdd(x_pos)
+                fehist = np.histogramdd(X)
             self.edges_hist_ = fehist[1]
             pf = fehist[0]
             self.fe_ = np.log(pf[np.nonzero(pf)])
-            if self.dim_x == 1:
-                self.fe_spline_ = interpolate.splrep(xf, self.fe_, s=0, per=self.per)
-            elif self.dim_x == 2:
-                xfa = [(edge[1:] + edge[:-1]) / 2.0 for edge in self.edges_hist_]
-                x, y = np.meshgrid(xfa[0], xfa[1])
-                fe_flat = pf.flatten()
-                x_coords = x.flatten()[np.nonzero(fe_flat)]
-                y_coords = y.flatten()[np.nonzero(fe_flat)]
-                self.fe_spline_ = interpolate.bisplrep(x_coords, y_coords, fe_flat[np.nonzero(fe_flat)])
         elif self.estimator == "kde":
-            self.kde_ = KernelDensity(kernel=self.kernel, bandwidth=self.bandwidth).fit(x_pos)
+            self.kde_ = KernelDensity(kernel=self.kernel, bandwidth=self.bandwidth).fit(X)
+            self.fe_ = self.kde_.score_samples(X)
+
+        # Spline interpolation
+        if self.dim_x == 1:
+            self.fe_spline_ = interpolate.splrep(xf, self.fe_, s=0, per=self.per)
+        elif self.dim_x == 2:
+            xfa = [(edge[1:] + edge[:-1]) / 2.0 for edge in self.edges_hist_]
+            x, y = np.meshgrid(xfa[0], xfa[1])
+            fe_flat = pf.flatten()
+            x_coords = x.flatten()[np.nonzero(fe_flat)]
+            y_coords = y.flatten()[np.nonzero(fe_flat)]
+            self.fe_spline_ = interpolate.bisplrep(x_coords, y_coords, fe_flat[np.nonzero(fe_flat)])
         self.fitted_ = True
         return self
 
@@ -134,30 +128,22 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
 
         # Input validation
         X = check_array(X)
-        if X.shape[1] == self.dim_x:
-            x_pos = X
-        else:
-            dt = X[1, 0] - X[0, 0]
-            if self.model in ["aboba"]:
-                x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-            elif self.model in ["euler", "euler_noiseless"]:
-                x_pos = X[:, 1 : 1 + self.dim_x]
-            n_samples, n_features = x_pos.shape
-            if n_features != self.dim_x:
-                raise ValueError("X shape does not match training shape")
+        n_samples, n_features = X.shape
+        if n_features != self.dim_x:
+            raise ValueError("X shape does not match training shape")
 
         if self.estimator == "histogram":
             if self.dim_x == 1:
-                bk = interpolate.splev(x_pos, self.fe_spline_, der=1)
+                bk = interpolate.splev(X, self.fe_spline_, der=1).reshape(-1, 1)
             elif self.dim_x == 2:
-                bkx = interpolate.bisplev(x_pos[:, 0], x_pos[:, 1], self.fe_spline_, dx=1).reshape(-1, 1)
-                bky = interpolate.bisplev(x_pos[:, 0], x_pos[:, 1], self.fe_spline_, dy=1).reshape(-1, 1)
+                bkx = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dx=1).reshape(-1, 1)
+                bky = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dy=1).reshape(-1, 1)
                 bk = np.hstack((bkx, bky))
             else:
                 raise NotImplementedError
         elif self.estimator == "kde":
-            bk = self.differentiateKernel(x_pos)
-        return np.hstack((X, bk))
+            bk = self.differentiateKernel(X)
+        return bk
 
     def predict(self, X):
         """Predict the values of the potential for the data samples in X using trained model.
@@ -177,29 +163,21 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         check_is_fitted(self, "fitted_")
         # Input validation
         X = check_array(X)
-        if X.shape[1] == self.dim_x:
-            x_pos = X
-        else:
-            dt = X[1, 0] - X[0, 0]
-            if self.model in ["aboba"]:
-                x_pos = X[:, 1 : 1 + self.dim_x] + 0.5 * dt * X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-            elif self.model in ["euler", "euler_noiseless"]:
-                x_pos = X[:, 1 : 1 + self.dim_x]
-        n_samples, n_features = x_pos.shape
+        n_samples, n_features = X.shape
         if n_features != self.dim_x:
             raise ValueError("X shape does not match training shape")
 
         if self.estimator == "histogram":
             if self.dim_x == 1:
-                return -interpolate.splev(x_pos, self.fe_spline_)
+                return -interpolate.splev(X, self.fe_spline_)
             elif self.dim_x == 2:
-                return -interpolate.bisplev(x_pos[:, 0], x_pos[:, 1], self.fe_spline_)
+                return -interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_)
             else:
                 # interpolate.interpn(points, self.fe_, x_pos, method="linear")
                 raise NotImplementedError
-                self.digitize(x_pos)
+                self.digitize(X)
         elif self.estimator == "kde":
-            return -self.kde_.score_samples(x_pos).reshape(-1, 1)
+            return -self.kde_.score_samples(X).reshape(-1, 1)
 
     def digitize(self, X):
         """Find location of a given points inside the bins of the histogram"""
@@ -213,6 +191,23 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         grad = np.empty_like(X)
         for n in range(self.dim_x):
             eps = np.zeros_like(X)
-            eps[:, n] = 0.5 * self.bandwidth
+            eps[:, n] = 0.1 * self.bandwidth
             grad[:, n] = (self.kde_.score_samples(X + eps) - self.kde_.score_samples(X - eps)) / (self.bandwidth)
         return grad
+
+    def _get_fitted(self):
+        """
+        Get fitted parameters
+        """
+        return {"estimator": self.estimator, "min_vals": self.min_vals, "max_vals": self.max_vals, "n_output_features": self.n_output_features_, "fe_spline": self.fe_spline_}
+
+    def _set_fitted(self, fitted_dict):
+        """
+        Set fitted parameters
+        """
+        self.estimator = "histogram"  # As we use the spline interpolation
+        self.min_vals = fitted_dict["min_vals"]
+        self.max_vals = fitted_dict["max_vals"]
+        self.n_output_features_ = fitted_dict["n_output_features"]
+        if "fe_splines" in fitted_dict:
+            self.fe_spline_ = fitted_dict["fe_spline"]

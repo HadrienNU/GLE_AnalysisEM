@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
 
 from GLE_analysisEM import Markov_Estimator
-from GLE_analysisEM.utils import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
+from GLE_analysisEM.post_processing import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
 
 from sklearn.preprocessing import FunctionTransformer
 
@@ -45,8 +45,8 @@ print(generator.get_coefficients())
 
 # ------ Estimation ------#
 # basis = GLE_BasisTransform(basis_type="linear")
-basis = GLE_BasisTransform(basis_type="polynomial", degree=3)
-estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, n_init=3, EnforceFDT=False, OptimizeForce=True, random_state=7, tol=1e-7, no_stop=False, max_iter=300)
+basis = GLE_BasisTransform(basis_type="free_energy_kde")
+estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, force_init=[1.0], n_init=3, EnforceFDT=False, OptimizeForce=False, random_state=7, tol=1e-8, no_stop=False, max_iter=1000, multiprocessing=8)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 print("---- Real ones ----")
