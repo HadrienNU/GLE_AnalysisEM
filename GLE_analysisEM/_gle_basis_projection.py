@@ -206,13 +206,12 @@ class LinearFeatures(TransformerMixin):
         """
         Set fitted parameters
         """
-        self.mean_ = fitted_dict["mean"]
-        self.n_output_features_ = fitted_dict["n_output_features"]
-
-
-# Mainly useful for pickling
-def linear_fct(x):
-    return x
+        if self.centered:
+            self.n_output_features_ = fitted_dict["n_output_features"]
+            if "mean" in fitted_dict:
+                self.mean_ = fitted_dict["mean"]
+            else:
+                self.mean_ = np.zeros((self.n_output_features_,))
 
 
 class GLE_BasisTransform(TransformerMixin, BaseEstimator):
