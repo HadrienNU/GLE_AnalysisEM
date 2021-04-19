@@ -414,7 +414,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         ``tol``, otherwise, a ``ConvergenceWarning`` is raised.
         Upon consecutive calls, training starts where it left off.
 
-        ..todo:: Change variable name of expA and SST into friction_coeffs and diffusion_coeffs
 
         Parameters
         ----------
