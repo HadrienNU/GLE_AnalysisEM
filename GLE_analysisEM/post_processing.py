@@ -54,10 +54,8 @@ def prony_splitting(coeffs, dim_x):
     eigs, right_vect = np.linalg.eig(coeffs["A"][dim_x:, dim_x:])
     right_coeffs = np.linalg.inv(right_vect) @ Ahv
     left_coeffs = Avh @ right_vect
-    # print(right_coeffs)
-    # print(left_coeffs)
-    a_est = left_coeffs[0, :] * right_coeffs[:, 0]
-    return -1 * np.real(a_est), -1 * eigs, -1 * np.imag(a_est)
+    a_est = -1 * left_coeffs[0, :] * right_coeffs[:, 0]
+    return np.abs(a_est), -1 * eigs, np.angle(a_est)
 
 
 def prony(t, F, m):
@@ -97,7 +95,7 @@ def prony(t, F, m):
     sol = np.linalg.lstsq(Amat, bmat, rcond=None)
     a_est = sol[0]
 
-    return np.real(a_est), b_est, np.imag(a_est)
+    return np.abs(a_est), b_est, np.angle(a_est)
 
 
 def prony_eval(t, a, b, c):
@@ -106,7 +104,7 @@ def prony_eval(t, a, b, c):
     """
     series = np.zeros_like(t, dtype=np.complex)
     for i, a in enumerate(a):
-        series += (a[i] + 1j * c[i]) * np.exp(b[i] * t)
+        series += a[i] * np.exp(b[i] * t + 1j * c[i])
     return np.real(series)
 
 
