@@ -721,7 +721,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 muh_out = np.hstack((muh_out, muh[:, self.dim_h :]))
         return muh_out
 
-    def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3):
+    def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3, rng=None):
         """Generate random samples from the fitted GLE model.
 
         Use the provided basis to compute the force term. The basis should be fitted first, if not will be fitted using a dummy trajectory.
@@ -744,7 +744,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         y : array, shape (nsamples,)
             Hidden variables values
         """
-        random_state = check_random_state(self.random_state)
+        if rng is None:
+            random_state = check_random_state(self.random_state)
+        else:
+            random_state = check_random_state(rng)
         self.dt = dt
         self._check_initial_parameters()
         if not (self.warm_start or hasattr(self, "converged_")):
