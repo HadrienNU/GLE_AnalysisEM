@@ -38,6 +38,40 @@ def memory_kernel(ntimes, dt, coeffs, dim_x, noDirac=False):
     return dt * np.arange(ntimes), Kernel
 
 
+def memory_kernel_logspace(dt, coeffs, dim_x, noDirac=False):
+    """
+    Return the value of the estimated memory kernel
+
+    Parameters
+    ----------
+    dt: Timestep
+    coeffs : Coefficients for diffusion and friction
+    dim_x: Dimension of visible variables
+    noDirac: Remove the dirac at time zero
+
+    Returns
+    -------
+    timespan : array-like, shape (n_samples, )
+        Array of time to evaluate memory kernel
+
+    kernel_evaluated : array-like, shape (n_samples, dim_x,dim_x)
+        Array of values of the kernel at time provided
+    """
+    Avv = coeffs["A"][:dim_x, :dim_x]
+    Ahv = coeffs["A"][dim_x:, :dim_x]
+    Avh = coeffs["A"][:dim_x, dim_x:]
+    Ahh = coeffs["A"][dim_x:, dim_x:]
+    eigs = np.linalg.eigvals(Ahh)
+    Kernel = np.zeros((150, dim_x, dim_x))
+    final_time = 25 / np.min(np.abs(np.real(eigs)))
+    times = np.logspace(np.log10(dt), np.log10(final_time), num=150)
+    for n, t in enumerate(times):
+        Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * t * Ahh), Ahv))
+    if not noDirac:
+        Kernel[0, :, :] = Kernel[0, :, :] + 2 * Avv
+    return times, Kernel
+
+
 def memory_timescales(coeffs, dim_x):
     """
     Compute the eigenvalues of A_hh to get the timescale of the memory
