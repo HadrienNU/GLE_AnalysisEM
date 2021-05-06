@@ -137,8 +137,8 @@ def prony_eval(t, a, b, c):
     Evaluate a prony series for each point in t
     """
     series = np.zeros_like(t, dtype=np.complex)
-    for i, a in enumerate(a):
-        series += a[i] * np.exp(b[i] * t + 1j * c[i])
+    for i, a_i in enumerate(a):
+        series += a_i * np.exp(b[i] * t + 1j * c[i])
     return np.real(series)
 
 
