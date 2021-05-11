@@ -92,7 +92,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
                 fehist = np.histogramdd(X)
             self.edges_hist_ = fehist[1]
             pf = fehist[0]
-            self.fe_ = np.log(pf[np.nonzero(pf)])
+            self.fe_ = np.where(pf > 0, -np.log(pf), np.zeros_like(pf))
         elif self.estimator == "kde":
             self.kde_ = KernelDensity(kernel=self.kernel, bandwidth=self.bandwidth).fit(X)
             self.fe_ = self.kde_.score_samples(X)
@@ -102,11 +102,12 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             self.fe_spline_ = interpolate.splrep(xf, self.fe_, s=0, per=self.per)
         elif self.dim_x == 2:
             xfa = [(edge[1:] + edge[:-1]) / 2.0 for edge in self.edges_hist_]
-            x, y = np.meshgrid(xfa[0], xfa[1])
-            fe_flat = pf.flatten()
-            x_coords = x.flatten()[np.nonzero(fe_flat)]
-            y_coords = y.flatten()[np.nonzero(fe_flat)]
-            self.fe_spline_ = interpolate.bisplrep(x_coords, y_coords, fe_flat[np.nonzero(fe_flat)])
+            # x, y = np.meshgrid(xfa[0], xfa[1])
+            # fe_flat = pf.flatten()
+            # x_coords = x.flatten()[np.nonzero(fe_flat)]
+            # y_coords = y.flatten()[np.nonzero(fe_flat)]
+            self.fe_spline_ = interpolate.RectBivariateSpline(xfa[0], xfa[1], self.fe_)
+            # self.fe_spline_ = interpolate.bisplrep(x_coords, y_coords, fe_flat[np.nonzero(fe_flat)])
         self.fitted_ = True
         return self
 
@@ -136,14 +137,17 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             if self.dim_x == 1:
                 bk = interpolate.splev(X, self.fe_spline_, der=1).reshape(-1, 1)
             elif self.dim_x == 2:
-                bkx = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dx=1).reshape(-1, 1)
-                bky = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dy=1).reshape(-1, 1)
+                bkx = self.fe_spline_.ev(X[:, 0], X[:, 1], dx=1).reshape(-1, 1)
+                bky = self.fe_spline_.ev(X[:, 0], X[:, 1], dy=1).reshape(-1, 1)
+
+                # bkx = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dx=1).reshape(-1, 1)
+                # bky = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dy=1).reshape(-1, 1)
                 bk = np.hstack((bkx, bky))
             else:
                 raise NotImplementedError
         elif self.estimator == "kde":
             bk = self.differentiateKernel(X)
-        return bk
+        return -bk
 
     def predict(self, X):
         """Predict the values of the potential for the data samples in X using trained model.
@@ -169,15 +173,16 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
 
         if self.estimator == "histogram":
             if self.dim_x == 1:
-                return -interpolate.splev(X, self.fe_spline_)
+                return interpolate.splev(X, self.fe_spline_).reshape(-1, 1)
             elif self.dim_x == 2:
-                return -interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_)
+                return self.fe_spline_.ev(X[:, 0], X[:, 1]).reshape(-1, 1)
+                # return -interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_)
             else:
                 # interpolate.interpn(points, self.fe_, x_pos, method="linear")
                 raise NotImplementedError
                 self.digitize(X)
         elif self.estimator == "kde":
-            return -self.kde_.score_samples(X).reshape(-1, 1)
+            return self.kde_.score_samples(X).reshape(-1, 1)
 
     def digitize(self, X):
         """Find location of a given points inside the bins of the histogram"""
