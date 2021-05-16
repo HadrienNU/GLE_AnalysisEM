@@ -361,9 +361,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             A random number generator instance that controls the random seed
             used for the method chosen to initialize the parameters.
         """
-        random_state = check_random_state(random_state)
+        self.random_state = check_random_state(random_state)
         if self.init_params == "random" or self.init_params == "markov":
-            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(0.5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
+            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=self.random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(0.5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
             if self.EnforceFDT:
                 C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
             else:
@@ -391,7 +391,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
-            self.force_coeffs = -random_state.random(size=(self.dim_x, self.dim_coeffs_force))  # -np.ones((self.dim_x, self.dim_coeffs_force))
+            self.force_coeffs = -self.random_state.random(size=(self.dim_x, self.dim_coeffs_force))  # -np.ones((self.dim_x, self.dim_coeffs_force))
 
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
@@ -442,7 +442,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         max_lower_bound = -np.infty
         self.converged_ = False
 
-        random_state = check_random_state(self.random_state)
+        self.random_state = check_random_state(self.random_state)
 
         self.logL = np.empty((n_init, self.max_iter))
         self.logL[:] = np.nan
@@ -462,7 +462,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for init in range(n_init):
             coeff_list_init = []
             if do_init:
-                self._initialize_parameters(random_state, traj_len=_min_traj_len)
+                self._initialize_parameters(self.random_state, traj_len=_min_traj_len)
                 if self.init_params == "markov":
                     self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
 
@@ -745,13 +745,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Hidden variables values
         """
         if rng is None:
-            random_state = check_random_state(self.random_state)
+            self.random_state = check_random_state(self.random_state)
         else:
-            random_state = check_random_state(rng)
+            self.random_state = check_random_state(rng)
         self.dt = dt
         self._check_initial_parameters()
         if not (self.warm_start or hasattr(self, "converged_")):
-            self._initialize_parameters(random_state, traj_len=n_samples)
+            self._initialize_parameters(self.random_state, traj_len=n_samples)
 
         if x0 is None:
             x0 = np.zeros((self.dim_x))
@@ -763,7 +763,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X_h = None
 
         for n in range(n_trajs):
-            txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=self.basis, rng=random_state)
+            txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=self.basis, rng=self.random_state)
 
             if X is None:
                 X = txv
