@@ -22,7 +22,7 @@ def filter_kalman(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h):
     invSYY = np.linalg.inv(Sigtemp[:dim_x, :dim_x])
     marg_mu = mutemp[dim_x:] + np.matmul(Sigtemp[dim_x:, :dim_x], np.matmul(invSYY, Xt - mutemp[:dim_x]))
     marg_sig = Sigtemp[dim_x:, dim_x:] - np.matmul(Sigtemp[dim_x:, :dim_x], np.matmul(invSYY, Sigtemp[dim_x:, :dim_x].T))
-
+    marg_sig = 0.5 * marg_sig + 0.5 * marg_sig.T  # Enforce symmetry
     R = expAh[dim_x:, :] - np.matmul(Sigtemp[dim_x:, :dim_x], np.matmul(invSYY, expAh[:dim_x, :]))
     # Pair probability distibution Z_t,Z_{t-1}
     mu_pair = np.hstack((marg_mu, mutm))

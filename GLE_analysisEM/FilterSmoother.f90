@@ -118,7 +118,7 @@ subroutine filter_kalman(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h, 
   marg_mu = mutemp(1+dim_x:) + matmul(Sigtemp(1+dim_x:, :dim_x), matmul(invSYY, Xt - mutemp(:dim_x)))
   marg_sig = Sigtemp(1+dim_x:, 1+dim_x:) -&
        matmul(Sigtemp(1+dim_x:, :dim_x),matmul(invSYY, transpose(Sigtemp(1+dim_x:, :dim_x))))
-
+  marg_sig = 0.5*marg_sig+0.5*transpose(marg_sig) ! To enforce symmetry
   !! Pair probability distibution Z_t,Z_{t-1}
   mu_pair(:dim_h) = marg_mu
   mu_pair(1+dim_h:) = mutm
