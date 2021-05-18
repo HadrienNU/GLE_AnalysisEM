@@ -55,6 +55,13 @@ subroutine filtersmoother(lenTraj, dim_x, dim_h, Xtplus, mutilde, R, diff, mu0, 
              muf(i, :), Sigf(i, :, :), muh(i - 1, :), Sigh(i - 1, :, :))
 
      end do
+  else if (dim_x == 1) then ! There is a speed-up for 1D visible case
+     !! Iterate and compute possible value for h at the same point
+     do i=1,lenTraj !! for i in range(1, lenTraj):
+        call filter_kalman_1D(muf(i - 1, :), Sigf(i - 1, :, :), Xtplus(i - 1,:), mutilde(i - 1,:), R,diff, dim_x, dim_h,&
+             muf(i, :), Sigf(i, :, :), muh(i - 1, :), Sigh(i - 1, :, :))
+
+     end do
   else
      !! Iterate and compute possible value for h at the same point
      do i=1,lenTraj !! for i in range(1, lenTraj):
@@ -168,6 +175,55 @@ subroutine smoothing_rauch(muft, Sigft, muStp, SigStp, Xtplus, mutilde_t, expAh,
   Sig_pair(1+dim_h:, 1+dim_h:) = marg_sig
   
 end subroutine smoothing_rauch
+
+
+
+!!$    Compute the foward step using Kalman filter, predict and update step
+!!$    Avoid matrix inversion when possible
+!!$    Parameters
+!!$    ----------
+!!$    mutm, Sigtm: Values of the foward distribution at t-1
+!!$    Xt, mutilde_tm: Values of the trajectories at T and t-1
+!!$    expAh, SST: Coefficients parameters["expA"][:, dim_x:] (dim_x+dim_h, dim_h) and SS^T (dim_x+dim_h, dim_x+dim_h)
+!!$    dim_x,dim_h: Dimension of visibles and hidden variables
+subroutine filter_kalman_1D(mutm, Sigtm, Xt, mutilde_tm, expAh, SST, dim_x, dim_h, marg_mu, marg_sig, mu_pair, Sig_pair)
+  implicit none
+  integer,intent(in)::dim_x,dim_h
+  double precision,dimension(dim_h),intent(in)::mutm
+  double precision,dimension(dim_h,dim_h),intent(in)::Sigtm
+  double precision,dimension(dim_x),intent(in)::Xt
+  double precision,dimension(dim_x+dim_h),intent(in)::mutilde_tm
+  double precision,dimension(dim_x+dim_h,dim_h),intent(in)::expAh
+  double precision,dimension(dim_x+dim_h,dim_x+dim_h),intent(in)::SST
+  
+  double precision,dimension(dim_h),intent(out)::marg_mu
+  double precision,dimension(dim_h,dim_h),intent(out)::marg_sig
+  double precision,dimension(2*dim_h),intent(out)::mu_pair
+  double precision,dimension(2*dim_h,2*dim_h),intent(out)::Sig_pair
+
+  double precision,dimension(dim_x+dim_h)::mutemp
+  double precision,dimension(dim_x+dim_h,dim_x+dim_h)::Sigtemp
+  double precision,dimension(dim_x,dim_x)::invSYY
+
+  !! Predict step marginalization Normal Gaussian
+  mutemp = mutilde_tm + matmul(expAh, mutm)
+  Sigtemp = SST + matmul(expAh, matmul(Sigtm, transpose(expAh)))
+  !! Update step conditionnal Normal Gaussian
+  marg_mu = mutemp(1+dim_x:) + matmul(Sigtemp(1+dim_x:, :dim_x), Xt - mutemp(:dim_x))/ Sigtemp(1,1)
+  marg_sig = Sigtemp(1+dim_x:, 1+dim_x:) -&
+       matmul(Sigtemp(1+dim_x:, :dim_x), transpose(Sigtemp(1+dim_x:, :dim_x)))/ Sigtemp(1,1)
+  marg_sig = 0.5*marg_sig+0.5*transpose(marg_sig) ! To enforce symmetry
+  !! Pair probability distibution Z_t,Z_{t-1}
+  mu_pair(:dim_h) = marg_mu
+  mu_pair(1+dim_h:) = mutm
+  Sig_pair(:dim_h, :dim_h) = marg_sig
+  Sig_pair(1+dim_h:, :dim_h) = matmul(expAh(1+dim_x:, :) - &
+       matmul(Sigtemp(1+dim_x:, :dim_x), matmul(invSYY, expAh(:dim_x, :))), Sigtm)
+  Sig_pair(:dim_h, 1+dim_h:) = transpose(Sig_pair(1+dim_h:, :dim_h))
+  Sig_pair(1+dim_h:, 1+dim_h:) = Sigtm
+  
+end subroutine filter_kalman_1D
+
 
 
 !!$    Compute the foward step using Kalman filter, predict and update step
