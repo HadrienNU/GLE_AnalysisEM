@@ -34,7 +34,7 @@ def memory_kernel(ntimes, dt, coeffs, dim_x, noDirac=False):
     for n in np.arange(ntimes):
         Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * n * dt * Ahh), Ahv))
     if not noDirac:
-        Kernel[0, :, :] = Kernel[0, :, :] + 2 * Avv
+        Kernel[0, :, :] = Kernel[0, :, :] + Avv
     return dt * np.arange(ntimes), Kernel
 
 
@@ -68,7 +68,7 @@ def memory_kernel_logspace(dt, coeffs, dim_x, noDirac=False):
     for n, t in enumerate(times):
         Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * t * Ahh), Ahv))
     if not noDirac:
-        Kernel[0, :, :] = Kernel[0, :, :] + 2 * Avv
+        Kernel[0, :, :] = Kernel[0, :, :] + Avv
     return times, Kernel
 
 
@@ -77,6 +77,18 @@ def memory_timescales(coeffs, dim_x):
     Compute the eigenvalues of A_hh to get the timescale of the memory
     """
     return np.linalg.eigvals(coeffs["A"][dim_x:, dim_x:])
+
+
+def friction_matrix(coeffs, dim_x):
+    """
+    Compute integral of memory kernel to get friction matrix
+    """
+
+    Avv = coeffs["A"][:dim_x, :dim_x]
+    Ahv = coeffs["A"][dim_x:, :dim_x]
+    Avh = coeffs["A"][:dim_x, dim_x:]
+    Ahh = coeffs["A"][dim_x:, dim_x:]
+    return Avv - np.matmul(Avh, np.matmul(np.linalg.inv(Ahh), Ahv))
 
 
 def prony_splitting(coeffs, dim_x):
