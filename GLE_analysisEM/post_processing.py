@@ -91,6 +91,19 @@ def friction_matrix(coeffs, dim_x):
     return Avv - np.matmul(Avh, np.matmul(np.linalg.inv(Ahh), Ahv))
 
 
+def diagonalC(coeffs, dim_x):
+    """
+    Return A and C after putting C in diagonal form
+    """
+    C = coeffs["C"]
+    lamb, vect = np.linalg.eigh(C[dim_x:, dim_x:])
+    vect_ext = np.identity(C.shape[0])
+    vect_ext[dim_x:, dim_x:] = vect
+    C_bis = vect_ext.T @ C @ vect_ext
+    A_bis = vect_ext.T @ coeffs["A"] @ vect_ext
+    return A_bis, C_bis
+
+
 def prony_splitting(coeffs, dim_x):
     """
     Compute the Kernel under prony series form
