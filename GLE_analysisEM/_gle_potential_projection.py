@@ -216,3 +216,4 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         self.n_output_features_ = fitted_dict["n_output_features"]
         if "fe_splines" in fitted_dict:
             self.fe_spline_ = fitted_dict["fe_spline"]
+        self.fitted_ = True
