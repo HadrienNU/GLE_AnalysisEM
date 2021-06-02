@@ -721,7 +721,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 muh_out = np.hstack((muh_out, muh[:, self.dim_h :]))
         return muh_out
 
-    def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3, rng=None):
+    def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3, burnout=0, rng=None):
         """Generate random samples from the fitted GLE model.
 
         Use the provided basis to compute the force term. The basis should be fitted first, if not will be fitted using a dummy trajectory.
@@ -766,15 +766,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=self.basis, rng=self.random_state)
 
             if X is None:
-                X = txv
+                X = txv[burnout:, :]
             else:
                 idx_trajs.append(len(X))
-                X = np.vstack((X, txv))
+                X = np.vstack((X, txv[burnout:, :]))
 
             if X_h is None:
-                X_h = h
+                X_h = h[burnout:, :]
             else:
-                X_h = np.vstack((X_h, h))
+                X_h = np.vstack((X_h, h[burnout:, :]))
         return X, idx_trajs, X_h
 
     def get_coefficients(self):
