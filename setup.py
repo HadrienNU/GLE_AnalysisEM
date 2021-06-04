@@ -4,7 +4,9 @@
 import codecs
 import os
 
-from setuptools import find_packages, setup
+import setuptools
+
+from numpy.distutils.core import setup, Extension
 
 # get __version__ from _version.py
 ver_file = os.path.join("GLE_analysisEM", "_version.py")
@@ -37,6 +39,8 @@ CLASSIFIERS = [
 ]
 EXTRAS_REQUIRE = {"tests": ["pytest", "pytest-cov"], "docs": ["sphinx", "sphinx-gallery", "sphinx_rtd_theme", "numpydoc", "matplotlib"]}
 
+lib_fs = Extension(name="_filter_smoother", sources=["GLE_analysisEM/FilterSmoother.f90"], extra_compile_args=["-llapack"])
+
 setup(
     name=DISTNAME,
     maintainer=MAINTAINER,
@@ -49,7 +53,8 @@ setup(
     long_description=LONG_DESCRIPTION,
     zip_safe=False,  # the package can run out of an .egg file
     classifiers=CLASSIFIERS,
-    packages=find_packages(),
+    packages=setuptools.find_packages(),
+    ext_modules=[lib_fs],
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
 )
