@@ -21,7 +21,7 @@ URL = "https://github.com/HadrienNU/GLE_AnalysisEM"
 LICENSE = "new BSD"
 DOWNLOAD_URL = "https://github.com/HadrienNU/GLE_AnalysisEM"
 VERSION = __version__
-INSTALL_REQUIRES = ["numpy", "scipy", "scikit-learn", "xarray", "pandas"]
+INSTALL_REQUIRES = ["numpy", "scipy", "scikit-learn", "pandas"]
 CLASSIFIERS = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved",
