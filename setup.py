@@ -39,7 +39,7 @@ CLASSIFIERS = [
 ]
 EXTRAS_REQUIRE = {"tests": ["pytest", "pytest-cov"], "docs": ["sphinx", "sphinx-gallery", "sphinx_rtd_theme", "numpydoc", "matplotlib"]}
 
-lib_fs = Extension(name="_filter_smoother", sources=["GLE_analysisEM/FilterSmoother.f90"], extra_compile_args=["-llapack"])
+lib_fs = Extension(name="GLE_analysisEM._filter_smoother", sources=["GLE_analysisEM/FilterSmoother.f90"], extra_compile_args=["-llapack"])
 
 setup(
     name=DISTNAME,
