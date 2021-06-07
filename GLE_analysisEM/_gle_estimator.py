@@ -762,19 +762,56 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         idx_trajs = []
         X_h = None
 
-        for n in range(n_trajs):
-            txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=self.basis, rng=self.random_state)
+        if self.multiprocessing > 1:  # If we ask for more than one process
+            child_seeds = np.random.SeedSequence(self.random_state.get_state()[1]).spawn(n_trajs)
+            with multiprocessing.Pool(processes=self.multiprocessing) as pool:
+                proc = [
+                    pool.apply_async(
+                        self.model_class.generator,
+                        args=(),
+                        kwds={
+                            "nsteps": n_samples,
+                            "rng": np.random.default_rng(child_seeds[n]),
+                            "dt": self.dt,
+                            "dim_h": self.dim_h,
+                            "x0": x0,
+                            "v0": v0,
+                            "friction": self.friction_coeffs,
+                            "SST": self.diffusion_coeffs,
+                            "force_coeffs": self.force_coeffs,
+                            "muh0": self.mu0,
+                            "sigh0": self.sig0,
+                            "basis": self.basis,
+                        },
+                    )
+                    for n in range(n_trajs)
+                ]
+                for p in proc:
+                    txv, h = p.get()  # will block
+                    if X is None:
+                        X = txv[burnout:, :]
+                    else:
+                        idx_trajs.append(len(X))
+                        X = np.vstack((X, txv[burnout:, :]))
 
-            if X is None:
-                X = txv[burnout:, :]
-            else:
-                idx_trajs.append(len(X))
-                X = np.vstack((X, txv[burnout:, :]))
+                    if X_h is None:
+                        X_h = h[burnout:, :]
+                    else:
+                        X_h = np.vstack((X_h, h[burnout:, :]))
+        else:
+            for n in range(n_trajs):
+                txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=self.basis, rng=self.random_state)
 
-            if X_h is None:
-                X_h = h[burnout:, :]
-            else:
-                X_h = np.vstack((X_h, h[burnout:, :]))
+                if X is None:
+                    X = txv[burnout:, :]
+                else:
+                    idx_trajs.append(len(X))
+                    X = np.vstack((X, txv[burnout:, :]))
+
+                if X_h is None:
+                    X_h = h[burnout:, :]
+                else:
+                    X_h = np.vstack((X_h, h[burnout:, :]))
         return X, idx_trajs, X_h
 
     def get_coefficients(self):
