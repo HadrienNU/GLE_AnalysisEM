@@ -362,3 +362,92 @@ class EulerForceVisibleModel(EulerModel):
         #     diffusion_coeffs = sol.x[-1] * (Id - np.matmul(friction_coeffs, friction_coeffs.T))
 
         return A, force_coeffs, SST
+
+
+class EulerFDT(EulerModel):
+    def _convert_user_coefficients(self, A, C, dt):
+        """
+        Convert the user provided coefficients into the local one
+        """
+        friction = A * dt
+        dim_tot = C.shape[0]
+        C_diag = np.trace(C) * np.identity(dim_tot) / dim_tot  # Get temperature from C
+        diffusion = np.matmul(friction, C_diag) + np.matmul(C_diag, friction.T)
+        return friction, diffusion
+
+    def _convert_local_coefficients(self, friction_coeffs, diffusion_coeffs, dt):
+        """
+        Convert the estimator coefficients into the user one
+        """
+        if not np.isfinite(np.sum(friction_coeffs)) or not np.isfinite(np.sum(diffusion_coeffs)):  # Check for NaN value
+            warnings.warn("NaN of infinite value in friction or diffusion coefficients.")
+            return friction_coeffs, diffusion_coeffs
+
+        A = friction_coeffs / dt
+        dim_tot = diffusion_coeffs.shape[0]
+        C = np.trace(diffusion_coeffs) / np.trace(friction_coeffs + friction_coeffs.T) * np.identity(dim_tot)  # This is a diagonal matrix such that C*(A+A.T)=SST
+        # C = scipy.linalg.solve_continuous_lyapunov(friction_coeffs, diffusion_coeffs)
+
+        return A, C
+
+    def m_step(self, A_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+        """M step.
+        TODO:   -Select dimension of fitted parameters from the sufficient stats
+        """
+        Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
+        Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
+
+        if OptimizeForce:
+            # bkbk = np.matmul(Pf, np.matmul(np.matmul(coeffs_force, np.matmul(suff_datas["bkbk"], coeffs_force.T)), Pf.T))
+            # bkdx = np.matmul(Pf, np.matmul(coeffs_force, suff_datas["bkdx"]))
+            # bkx = np.matmul(Pf, np.matmul(coeffs_force, suff_datas["bkx"]))
+            # invxx = np.linalg.inv(sufficient_stat["xx"])
+            # Ybk = sufficient_stat["bkdx"].T - np.matmul(sufficient_stat["xdx"].T, np.matmul(invxx, sufficient_stat["bkx"].T))
+            # bkbk = sufficient_stat["bkbk"] - np.matmul(sufficient_stat["bkx"], np.matmul(invxx, sufficient_stat["bkx"].T))
+            # print(Ybk, sufficient_stat["bkdx"].T, np.matmul(sufficient_stat["xdx"].T, np.matmul(invxx, sufficient_stat["bkx"].T)))
+            # print(np.matmul(Ybk, np.linalg.inv(dt * bkbk)))
+            # print(sufficient_stat["bkx"].T)
+
+            # Visible variables only
+            # print("Visible")
+            invxx = np.linalg.inv(sufficient_stat["xx"][: self.dim_x, : self.dim_x])
+            Ybk = sufficient_stat["bkdx"][:, : self.dim_x].T - np.matmul(sufficient_stat["xdx"][: self.dim_x, : self.dim_x].T, np.matmul(invxx, sufficient_stat["bkx"][:, : self.dim_x].T))
+
+            bkbk = sufficient_stat["bkbk"] - np.matmul(sufficient_stat["bkx"][:, : self.dim_x], np.matmul(invxx, sufficient_stat["bkx"][:, : self.dim_x].T))
+            # print(Ybk, sufficient_stat["bkdx"][:, : self.dim_x].T, -np.matmul(sufficient_stat["xdx"][: self.dim_x, : self.dim_x].T, np.matmul(invxx, sufficient_stat["bkx"][:, : self.dim_x].T)))
+            # print(np.matmul(Ybk, np.linalg.inv(dt * bkbk)))
+            force_coeffs = (np.matmul(Ybk, np.linalg.inv(dt * bkbk)))[: self.dim_x, :]
+        else:
+            force_coeffs = coeffs_force_old
+
+        YX = sufficient_stat["xdx"].T - np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
+        XX = sufficient_stat["xx"]
+        A = -np.matmul(YX, np.linalg.inv(XX))
+
+        if OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
+            Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
+            Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
+
+            bkbk = np.matmul(Pf, np.matmul(np.matmul(force_coeffs, np.matmul(sufficient_stat["bkbk"], force_coeffs.T)), Pf.T))
+            bkdx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkdx"]))
+            bkx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
+
+            residuals = sufficient_stat["dxdx"] + np.matmul(A, sufficient_stat["xdx"]) + np.matmul(A, sufficient_stat["xdx"]).T - bkdx.T - bkdx
+            residuals += np.matmul(A, np.matmul(sufficient_stat["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
+            SST = 0.5 * (residuals + residuals.T)
+        else:
+            SST = 1
+        # if EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
+        #     theta0 = friction_coeffs.ravel()  # Starting point of the scipy root algorithm
+        #     theta0 = np.hstack((theta0, (self.dim_x + dim_h) / np.trace(np.matmul(np.linalg.inv(diffusion_coeffs), (Id - np.matmul(friction_coeffs, friction_coeffs.T))))))
+        #
+        #     # To find the better value of the parameters based on the means values
+        #     # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + dim_h), method="lm")
+        #     # cons = scipy.optimize.NonlinearConstraint(detConstraints, 1e-10, np.inf)
+        #     sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + dim_h), method="Nelder-Mead")
+        #     if not sol.success:
+        #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
+        #     friction_coeffs = sol.x[:-1].reshape((self.dim_x + dim_h, self.dim_x + dim_h))
+        #     diffusion_coeffs = sol.x[-1] * (Id - np.matmul(friction_coeffs, friction_coeffs.T))
+
+        return A, force_coeffs, SST

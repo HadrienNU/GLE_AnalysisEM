@@ -16,7 +16,7 @@ from sklearn.neighbors import KDTree
 from .random_matrix import generateRandomDefPosMat
 from .post_processing import correlation
 from ._aboba_model import ABOBAModel
-from ._euler_model import EulerModel, EulerNLModel, EulerFixMarkovModel, EulerForceVisibleModel
+from ._euler_model import EulerModel, EulerNLModel, EulerFixMarkovModel, EulerForceVisibleModel, EulerFDT
 
 from ._gle_basis_projection import GLE_BasisTransform
 
@@ -30,7 +30,19 @@ except ImportError as err:
 
 import multiprocessing
 
-model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel, "euler_fv": EulerForceVisibleModel}
+model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel, "euler_fv": EulerForceVisibleModel, "euler_fdt": EulerFDT}
+
+
+def diagonalC(A, C, dim_x):
+    """
+    Return A and C after putting C in diagonal form
+    """
+    lamb, vect = np.linalg.eigh(C[dim_x:, dim_x:])
+    vect_ext = np.identity(C.shape[0])
+    vect_ext[dim_x:, dim_x:] = vect
+    C_bis = vect_ext.T @ C @ vect_ext
+    A_bis = vect_ext.T @ A @ vect_ext
+    return A_bis, C_bis
 
 
 def scalar_product_localized_basis(traj, dim_x, dim_h, basis):
@@ -351,7 +363,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if not hasattr(self, "diffusion_coeffs"):
             self.diffusion_coeffs = np.identity(self.dim_x + self.dim_h)
 
-    def _initialize_parameters(self, random_state, traj_len=50):
+    def _initialize_parameters(self, random_state, traj_len=50, kT=1.0):
         """Initialize the model parameters.
 
         Parameters
@@ -364,15 +376,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.random_state = check_random_state(random_state)
         if self.init_params == "random" or self.init_params == "markov":
             A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=self.random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(0.5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
-            if self.EnforceFDT:
-                C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
+            # if self.EnforceFDT:
+            #     C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
+            # else:
+            if self.C_init is None:
+                # temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
+                # C = temp_mat + temp_mat.T
+                C = kT * np.identity(self.dim_x + self.dim_h)  # If unknown choose equilibrium case as starting and get temperature from argument
             else:
-                if self.C_init is None:
-                    # temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
-                    # C = temp_mat + temp_mat.T
-                    C = np.identity(self.dim_x + self.dim_h)
-                else:
-                    C = np.asarray(self.C_init)
+                C = np.asarray(self.C_init)
             (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A, C, self.dt)
         elif self.init_params == "user":
             (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
