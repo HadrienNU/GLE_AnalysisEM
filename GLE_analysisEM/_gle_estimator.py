@@ -3,6 +3,7 @@ This the main estimator module
 """
 import numpy as np
 import pandas as pd
+import scipy.optimize
 
 import warnings
 from time import time
@@ -246,8 +247,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         warm_start=False,
         no_stop=False,
         verbose=0,
-        verbose_interval=10,
+        verbose_interval=50,
         multiprocessing=1,
+        bgfs=False,
     ):
         self.dim_x = dim_x
         self.dim_h = dim_h
@@ -277,6 +279,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.verbose = verbose
         self.verbose_interval = verbose_interval
         self.multiprocessing = multiprocessing
+        self.bgfs = bgfs
 
     def _more_tags(self):
         return {"X_types": "2darray"}
@@ -535,6 +538,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.lower_bound_ = max_lower_bound
         self._print_verbose_msg_fit_end(max_lower_bound, best_n_init, best_n_iter)
 
+        # Once converged we turn to bgfs algorithm
+        if self.bgfs:
+            optimize_params = (self.OptimizeForce, self.OptimizeDiffusion)
+            self.OptimizeForce = False
+            self.OptimizeDiffusion = False
+            x0 = self.vectorization_coefficients()
+            res = scipy.optimize.minimize(self._em_step, x0, args=(traj_list, datas_visible), method="BFGS", options={"gtol": 1e-05, "maxiter": self.max_iter})
+            print(res)
+            self.unvectorization_coefficient(res.x)
+            self.OptimizeForce, self.OptimizeDiffusion = optimize_params
+            print("Comparaison L", self.lower_bound_, -res.fun)
         return self
 
     def _e_step(self, traj):
@@ -614,9 +628,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Wrapper of the E and M for gradient descent algorithm
         """
+        # print(vect_coeff)
         self.unvectorization_coefficient(vect_coeff)
         new_stat = self._e_step_stats(traj_list, datas_visible)
-        return self.loglikelihood(new_stat)
+        return -1 * self.loglikelihood(new_stat)
 
     def _check_finiteness(self):
         """
@@ -848,12 +863,21 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Return all current coefficients under a vector form
         """
-        vect = self.friction_coeffs.ravel()
+        A, C = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
+        A_bis, C_diag = diagonalC(A, C, self.dim_x)
+        print(A_bis, C_diag)
+        vect = A_bis.ravel()
+        # vect = A[: self.dim_x, : self.dim_x].ravel()
+        # vect = np.hstack((vect, A[: self.dim_x, self.dim_x :]))
+        # vect = np.hstack((vect, A[self.dim_x :, self.dim_x :].ravel()))
         vect = np.hstack((vect, self.mu0))
         if self.OptimizeForce:
             vect = np.hstack((vect, self.force_coeffs.ravel()))
         if self.OptimizeDiffusion:
             vect = np.hstack((vect, self.diffusion_coeffs.ravel()))
+        elif self.EnforceFDT:
+            temp = np.trace(C) / (self.dim_x + self.dim_h)
+            vect = np.hstack((vect, [temp]))
         return vect
 
     def unvectorization_coefficient(self, vect_c):
@@ -861,14 +885,43 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Set estimator coefficient to value given by the vector
         """
         friction, remaining = np.split(vect_c, [(self.dim_x + self.dim_h) ** 2])
-        self.friction_coeffs = friction.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+        A = friction.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+        (self.friction_coeffs, _) = self.model_class._convert_user_coefficients(A, np.identity(self.dim_x + self.dim_h), self.dt)
         self.mu0, remaining = np.split(remaining, [self.dim_h])
         if self.OptimizeForce:
             force, remaining = np.split(remaining, [self.dim_x * self.dim_coeffs_force])
             self.force_coeffs = force.reshape((self.dim_x, self.dim_coeffs_force))
         if self.OptimizeDiffusion:
             diffusion, remaining = np.split(remaining, [(self.dim_x + self.dim_h) ** 2])
-            self.diffusion_coeffs = diffusion.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+            (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A, diffusion.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h)), self.dt)
+        elif self.EnforceFDT:
+            temp, remaining = np.split(remaining, [1])
+            C_fdt = temp * np.identity(self.dim_x + self.dim_h)
+            (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A, C_fdt, self.dt)
+
+        # if len(x) != 2 * self.dim_h:
+        #     raise ValueError("Wrong dimension for x")
+        # dim_h_block = [2] * (self.dim_h // 2) + [1] * (self.dim_h % 2)
+        # A = np.zeros((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
+        # # A[: self.dim_x, : self.dim_x] = 1e-5
+        # previous_h = self.dim_x
+        # cum_dim = 0
+        # for h_block in dim_h_block:
+        #     x_block, x = np.split(x, [2 * h_block])
+        #     # print(x_block, x)
+        #     min_dim = min(previous_h, h_block)
+        #     # Block diagonal
+        #     if h_block == 1:
+        #         A[cum_dim + previous_h : cum_dim + previous_h + min_dim, 0 : self.dim_x] = -np.sqrt(x_block[0])
+        #         A[0 : self.dim_x, cum_dim + previous_h : cum_dim + previous_h + min_dim] = np.sqrt(x_block[0])
+        #         A[cum_dim + previous_h : cum_dim + previous_h + h_block, cum_dim + previous_h : cum_dim + previous_h + h_block] = x_block[1]  # random_clever_gen()
+        #     elif h_block == 2:
+        #         A[cum_dim + previous_h : cum_dim + previous_h + 2, 0 : self.dim_x] = [[-np.sqrt(x_block[0])], [-np.sqrt(x_block[0])]]
+        #         A[0 : self.dim_x, cum_dim + previous_h : cum_dim + previous_h + 2] = [np.sqrt(x_block[0]), np.sqrt(x_block[0])]
+        #         A[cum_dim + previous_h : cum_dim + previous_h + h_block, cum_dim + previous_h : cum_dim + previous_h + h_block] = [[x_block[1], x_block[2]], [-x_block[2], x_block[1]]]  # random_clever_gen()
+        #
+        #     cum_dim += previous_h
+        #     previous_h = h_block
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
