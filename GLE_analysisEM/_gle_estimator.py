@@ -157,9 +157,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     OptimizeDiffusion: bool, default=True
         Optimize or not the diffusion coefficients
 
-    EnforceFDT: bool, default =False
-        Enforce the fluctuation-dissipation theorem
-
     init_params : {'markov', 'user','random'}, defaults to 'random'.
 
         The method used to initialize the fitting coefficients.
@@ -220,7 +217,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         max_iter=100,
         OptimizeForce=True,
         OptimizeDiffusion=True,
-        EnforceFDT=False,
         init_params="random",
         model="euler",
         basis=GLE_BasisTransform(basis_type="linear"),
@@ -242,7 +238,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         self.OptimizeForce = OptimizeForce
         self.OptimizeDiffusion = OptimizeDiffusion
-        self.EnforceFDT = EnforceFDT
 
         self.model = model
         self.basis = basis
@@ -301,11 +296,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.model not in model_class.keys():
             raise ValueError("Model {} not implemented".format(self.model))
         self.model_class = model_class[self.model](self.dim_x)
-        if self.EnforceFDT and not self.OptimizeDiffusion:
-            self.OptimizeDiffusion = True
-            warnings.warn("As enforcement of FDT was asked, the diffusion coefficients will be optimized too.")
-        # if not self.OptimizeForce and self.force_init is None:
-        #     raise ValueError("No initial values for the force is provided and OptimizeForce is set to False")
 
         if self.init_params == "user":
             if self.n_init != 1:
@@ -324,9 +314,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 raise ValueError("Wrong dimensions for A_init")
             if self.C_init is None:
                 self.C_init = np.identity(self.dim_x + self.dim_h)
-            if self.EnforceFDT:
-                self.C_init = np.trace(self.C_init) * np.identity(self.dim_x + self.dim_h) / (self.dim_x + self.dim_h)
-
             expA, SST = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
@@ -364,15 +351,12 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.random_state = check_random_state(random_state)
         if self.init_params == "random" or self.init_params == "markov":
             A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=self.random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(0.5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
-            if self.EnforceFDT:
-                C = np.identity(self.dim_x + self.dim_h)  # random_state.standard_exponential() *
+            if self.C_init is None:
+                # temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
+                # C = temp_mat + temp_mat.T
+                C = np.identity(self.dim_x + self.dim_h)
             else:
-                if self.C_init is None:
-                    # temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
-                    # C = temp_mat + temp_mat.T
-                    C = np.identity(self.dim_x + self.dim_h)
-                else:
-                    C = np.asarray(self.C_init)
+                C = np.asarray(self.C_init)
             (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A, C, self.dt)
         elif self.init_params == "user":
             (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
@@ -560,7 +544,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Numerical minimization
         """
-        friction, force, diffusion = self.model_class.m_step_num(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        friction, force, diffusion = self.model_class.m_step_num(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.OptimizeDiffusion, self.OptimizeForce)
         self.friction_coeffs = friction
         if self.OptimizeForce:
             self.force_coeffs = force
@@ -572,7 +556,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """M step.
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
         """
-        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.OptimizeDiffusion, self.OptimizeForce)
 
         self.friction_coeffs = friction
         if self.OptimizeForce:
@@ -583,20 +567,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # self.sig0 = C[self.dim_x :, self.dim_x :]
         if self.OptimizeDiffusion:
             self.diffusion_coeffs = diffusion
-        # -----------------------------------------
-
-        # # if self.EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
-        # #     theta0 = self.friction_coeffs.ravel()  # Starting point of the scipy root algorithm
-        # #     theta0 = np.hstack((theta0, (self.dim_x + self.dim_h) / np.trace(np.matmul(np.linalg.inv(self.diffusion_coeffs), (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))))))
-        # #
-        # #     # To find the better value of the parameters based on the means values
-        # #     # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="lm")
-        # #     # cons = scipy.optimize.NonlinearConstraint(detConstraints, 1e-10, np.inf)
-        # #     sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, self.dim_x + self.dim_h), method="Nelder-Mead")
-        # #     if not sol.success:
-        # #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
-        # #     self.friction_coeffs = sol.x[:-1].reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-        # #     self.diffusion_coeffs = sol.x[-1] * (Id - np.matmul(self.friction_coeffs, self.friction_coeffs.T))
 
     def _em_step(self, vect_coeff, traj_list, datas_visible):
         """
@@ -618,7 +588,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _m_step_markov(self, sufficient_stat_vis):
         """Compute coefficients estimate via Markovian approximation to provide initialization"""
         A_full, C_full = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
-        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat_vis, 0, self.dt, self.EnforceFDT, self.OptimizeDiffusion, self.OptimizeForce)
+        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat_vis, 0, self.dt, self.OptimizeDiffusion, self.OptimizeForce)
 
         A, C = self.model_class._convert_local_coefficients(friction, diffusion, self.dt)
         A_full[: self.dim_x, : self.dim_x] = A
@@ -860,10 +830,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
-        if self.EnforceFDT:
-            return (self.dim_x + self.dim_h) ** 2 + 1 + self.dim_h + self.dim_h ** 2
-        else:
-            return 2 * (self.dim_x + self.dim_h) ** 2 + self.dim_h + self.dim_h ** 2
+        return 2 * (self.dim_x + self.dim_h) ** 2 + self.dim_h + self.dim_h ** 2
 
     def bic(self, X):
         """Bayesian information criterion for the current model on the input X.

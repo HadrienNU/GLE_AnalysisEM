@@ -65,7 +65,7 @@ class ABOBAModel(AbstractModel):
 
         return traj[:, : self.dim_x], mutilde, expA[:, self.dim_x :]
 
-    def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+    def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
         """M step.
         TODO:   -Select dimension of fitted parameters from the sufficient stats
         """
@@ -96,18 +96,6 @@ class ABOBAModel(AbstractModel):
 
         else:
             SST = 1.0
-        # if EnforceFDT:  # In case we want the FDT the starting seed is the computation without FDT
-        #     theta0 = friction_coeffs.ravel()  # Starting point of the scipy root algorithm
-        #     theta0 = np.hstack((theta0, (dim_x + dim_h) / np.trace(np.matmul(np.linalg.inv(diffusion_coeffs), (Id - np.matmul(friction_coeffs, friction_coeffs.T))))))
-        #
-        #     # To find the better value of the parameters based on the means values
-        #     # sol = scipy.optimize.root(mle_derivative_expA_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, dim_x + dim_h), method="lm")
-        #     # cons = scipy.optimize.NonlinearConstraint(detConstraints, 1e-10, np.inf)
-        #     sol = scipy.optimize.minimize(mle_FDT, theta0, args=(sufficient_stat["dxdx"], sufficient_stat["xdx"], sufficient_stat["xx"], bkbk, bkdx, bkx, dim_x + dim_h), method="Nelder-Mead")
-        #     if not sol.success:
-        #         warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
-        #     friction_coeffs = sol.x[:-1].reshape((dim_x + dim_h, dim_x + dim_h))
-        #     diffusion_coeffs = sol.x[-1] * (Id - np.matmul(friction_coeffs, friction_coeffs.T))
 
         return expA, force_coeffs, SST
 
@@ -208,24 +196,15 @@ class ABOBAModel(AbstractModel):
         SST = kbT * (np.eye(self.dim_x + dim_h) - np.matmul(expA, np.matmul(np.eye(self.dim_x + dim_h), expA.T)))
         return -self.loglikelihood(suff_datas, expA, SST, coeffs_force, dim_h, dt)
 
-    def m_step_num(self, expA, SST, coeffs_force, sufficient_stat, dim_h, dt, EnforceFDT, OptimizeDiffusion, OptimizeForce):
+    def m_step_num(self, expA, SST, coeffs_force, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
         """
         Do numerical maximization instead of analytical one
         """
-        if EnforceFDT:
-            theta0 = np.concatenate((expA.flatten(), [1.0], coeffs_force.flatten()))
-            sol = scipy.optimize.minimize(self.negloglike_tominimize_FDT, theta0, args=(sufficient_stat, self.dim_x, dim_h, dt), method="Nelder-Mead")
-            expA_sol = sol.x[: (self.dim_x + dim_h) ** 2].reshape(self.dim_x + dim_h, self.dim_x + dim_h)
-            kbT = sol.x[(self.dim_x + dim_h) ** 2]
-            force_coeffs_sol = sol.x[(self.dim_x + dim_h) ** 2 + 1 :].reshape(self.dim_x, -1)
-            # print(kbT)
-            SST_sol = kbT * (np.eye(self.dim_x + dim_h) - np.matmul(expA_sol, np.matmul(np.eye(self.dim_x + dim_h), expA_sol.T)))
-        else:
-            theta0 = np.concatenate((expA.flatten(), SST.flatten(), coeffs_force.flatten()))
-            sol = scipy.optimize.minimize(self.negloglike_tominimize, theta0, args=(sufficient_stat, self.dim_x, dim_h, dt), method="Nelder-Mead", options={"maxfev": 5000})
-            expA_sol = sol.x[: (self.dim_x + dim_h) ** 2].reshape(self.dim_x + dim_h, self.dim_x + dim_h)
-            SST_sol = sol.x[(self.dim_x + dim_h) ** 2 : 2 * (self.dim_x + dim_h) ** 2].reshape(self.dim_x + dim_h, self.dim_x + dim_h)
-            force_coeffs_sol = sol.x[2 * (self.dim_x + dim_h) ** 2 :].reshape(self.dim_x, -1)
+        theta0 = np.concatenate((expA.flatten(), SST.flatten(), coeffs_force.flatten()))
+        sol = scipy.optimize.minimize(self.negloglike_tominimize, theta0, args=(sufficient_stat, self.dim_x, dim_h, dt), method="Nelder-Mead", options={"maxfev": 5000})
+        expA_sol = sol.x[: (self.dim_x + dim_h) ** 2].reshape(self.dim_x + dim_h, self.dim_x + dim_h)
+        SST_sol = sol.x[(self.dim_x + dim_h) ** 2 : 2 * (self.dim_x + dim_h) ** 2].reshape(self.dim_x + dim_h, self.dim_x + dim_h)
+        force_coeffs_sol = sol.x[2 * (self.dim_x + dim_h) ** 2 :].reshape(self.dim_x, -1)
         if not sol.success:
             warnings.warn("M step did not converge" "{}".format(sol), ConvergenceWarning)
         return expA_sol, force_coeffs_sol, SST_sol
