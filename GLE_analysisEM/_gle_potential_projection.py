@@ -3,6 +3,7 @@ This the main estimator module
 """
 import numpy as np
 from scipy import interpolate
+import scipy.stats
 
 from sklearn.neighbors import KernelDensity
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -36,7 +37,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         The kernel of the KDE
     """
 
-    def __init__(self, dim_x=1, estimator="histogram", bins="auto", kernel="gaussian", bandwidth=1.0, per=False):
+    def __init__(self, dim_x=1, estimator="histogram", bins="auto", kernel="gaussian", bandwidth="scott", per=False):
 
         self.dim_x = dim_x
         self.estimator = estimator
@@ -91,15 +92,27 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
             else:
                 fehist = np.histogramdd(X)
             self.edges_hist_ = fehist[1]
-            pf = fehist[0]
-            self.fe_ = np.where(pf > 0, -np.log(pf), np.zeros_like(pf))
+            self.hist_ = fehist[0]
+            self.fe_ = np.where(self.hist_ > 0, -np.log(self.hist_), np.zeros_like(self.hist_))
         elif self.estimator == "kde":
-            self.kde_ = KernelDensity(kernel=self.kernel, bandwidth=self.bandwidth).fit(X)
-            self.fe_ = self.kde_.score_samples(X)
+            A = min(np.min(np.std(X, axis=0)), np.min(scipy.stats.iqr(X, rng=(25, 75), scale=1.0, nan_policy="omit", axis=0)) / 1.34)  # Estimation of data span
+            if self.bandwidth == "scott":
+                bandwidth = A * len(X) ** (-1.0 / (self.dim_x + 4))
+            elif self.bandwidth == "silverman":
+                bandwidth = A * (len(X) * (self.dim_x + 2) / 4.0) ** (-1.0 / (self.dim_x + 4))
+            else:
+                bandwidth = float(self.bandwidth)
+            # print(bandwidth)
+            self.kde_ = KernelDensity(kernel=self.kernel, bandwidth=bandwidth, rtol=1e-5).fit(X)
+            if self.dim_x == 1:
+                nb_points = int(np.floor(np.max(self.max_vals - self.min_vals) / (0.25 * bandwidth)))  # Use points every quarter bandwidth that should give a correct number of points
+                # print(nb_points)
+                xf = np.linspace(self.min_vals - 2 * bandwidth, self.max_vals + 2 * bandwidth, nb_points)  # We extend a bit the range to allow slow decay of the density
+                self.fe_ = -1 * self.kde_.score_samples(xf)
 
-        # Spline interpolation
+        # Spline interpolation for fast evaluation
         if self.dim_x == 1:
-            self.fe_spline_ = interpolate.splrep(xf, self.fe_, s=0, per=self.per)
+            self.fe_spline_ = interpolate.splrep(xf, self.fe_, per=self.per)  # A bit of smoothing
         elif self.dim_x == 2:
             xfa = [(edge[1:] + edge[:-1]) / 2.0 for edge in self.edges_hist_]
             # x, y = np.meshgrid(xfa[0], xfa[1])
@@ -133,20 +146,21 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
         if n_features != self.dim_x:
             raise ValueError("X shape does not match training shape")
 
-        if self.estimator == "histogram":
-            if self.dim_x == 1:
-                bk = interpolate.splev(X, self.fe_spline_, der=1).reshape(-1, 1)
-            elif self.dim_x == 2:
-                bkx = self.fe_spline_.ev(X[:, 0], X[:, 1], dx=1).reshape(-1, 1)
-                bky = self.fe_spline_.ev(X[:, 0], X[:, 1], dy=1).reshape(-1, 1)
+        # if self.estimator == "histogram":
+        # Use the spline interpolation in any case to speed-up the evaluation
+        if self.dim_x == 1:
+            bk = interpolate.splev(X, self.fe_spline_, der=1).reshape(-1, 1)
+        elif self.dim_x == 2:
+            bkx = self.fe_spline_.ev(X[:, 0], X[:, 1], dx=1).reshape(-1, 1)
+            bky = self.fe_spline_.ev(X[:, 0], X[:, 1], dy=1).reshape(-1, 1)
 
-                # bkx = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dx=1).reshape(-1, 1)
-                # bky = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dy=1).reshape(-1, 1)
-                bk = np.hstack((bkx, bky))
-            else:
-                raise NotImplementedError
-        elif self.estimator == "kde":
-            bk = self.differentiateKernel(X)
+            # bkx = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dx=1).reshape(-1, 1)
+            # bky = interpolate.bisplev(X[:, 0], X[:, 1], self.fe_spline_, dy=1).reshape(-1, 1)
+            bk = np.hstack((bkx, bky))
+        else:
+            raise NotImplementedError
+        # elif self.estimator == "kde":
+        #     bk = self.differentiateKernel(X)
         return -bk
 
     def predict(self, X):

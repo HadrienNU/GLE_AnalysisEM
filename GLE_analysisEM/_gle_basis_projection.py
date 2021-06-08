@@ -89,7 +89,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
                 self.to_combine_ = True and (not self.dim_x == 1)
 
             elif self.basis_type == "free_energy_kde":
-                self.featuresTransformer = GLE_PotentialTransform(estimator="kde", dim_x=self.dim_x, bandwidth=self.kwargs.get("bandwidth", 1e-3), per=self.kwargs.get("periodic", False))
+                self.featuresTransformer = GLE_PotentialTransform(estimator="kde", dim_x=self.dim_x, bandwidth=self.kwargs.get("bandwidth", "scott"), per=self.kwargs.get("periodic", False))
 
             elif self.basis_type == "free_energy_histogram" or self.basis_type == "free_energy":  # Default free energy set to histogram
                 self.featuresTransformer = GLE_PotentialTransform(estimator="histogram", dim_x=self.dim_x, bins=self.kwargs.get("bins", "auto"), per=self.kwargs.get("periodic", False))
