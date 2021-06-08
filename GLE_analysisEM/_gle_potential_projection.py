@@ -196,7 +196,17 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
                 raise NotImplementedError
                 self.digitize(X)
         elif self.estimator == "kde":
-            return self.kde_.score_samples(X).reshape(-1, 1)
+            return -1 * self.kde_.score_samples(X).reshape(-1, 1)
+
+    def sample(self, n_samples):
+        """
+        Draw samples from stationnary distribution
+        """
+        if self.dim_x == 1:
+            x = np.linspace(self.min_vals, self.max_vals, 250)
+            pf = np.exp(-interpolate.splev(x, self.fe_spline_))
+        else:
+            raise NotImplementedError
 
     def digitize(self, X):
         """Find location of a given points inside the bins of the histogram"""

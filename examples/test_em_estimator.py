@@ -7,7 +7,14 @@ Result of the fit as a function of the number of trajectories for :class:`GLE_an
 """
 import numpy as np
 import pandas as pd
+import glob
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
+
+from GLE_analysisEM.datas_loaders import loadDatas_pos
+
+import warnings
+
+warnings.filterwarnings("error")
 
 # from GLE_analysisEM.utils import loadTestDatas_est
 # , "../GLE_analysisEM/tests/1_trajectories.dat", "../GLE_analysisEM/tests/2_trajectories.dat"
@@ -26,30 +33,33 @@ dim_h = 1
 random_state = 42
 model = "euler_fv"
 force = -np.identity(dim_x)
-max_iter = 200
+max_iter = 50
 
-ntrajs = 25
-
-pot_gen = GLE_BasisTransform(basis_type="linear")
-
-# Trajectory generation
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="random", model=model, basis=pot_gen, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0)
-print("Real parameters", generator.get_coefficients())
-
-print("Initial ll", generator.score(X, idx_trajs=idx))
-
-basis = GLE_BasisTransform(basis_type="free_energy")
+# ntrajs = 25
+# pot_gen = GLE_BasisTransform(basis_type="linear")
+#
+# # Trajectory generation
+# generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, EnforceFDT=True, force_init=force, init_params="random", model=model, basis=pot_gen, random_state=random_state)
+# X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0, burnout=100)
+# print("Real parameters", generator.get_coefficients())
+# print("Initial ll", generator.score(X, idx_trajs=idx))
+#
+# traj_list = np.split(X, idx)
+# for n, trj in enumerate(traj_list):
+#     np.savetxt("Trajs/{}_trajectories.dat".format(n), traj_list[n])
+paths = glob.glob("Trajs/*_trajectories.dat")
+X, idx = loadDatas_pos(paths, dim_x)
+basis = GLE_BasisTransform(basis_type="linear")
 # Trajectory estimation
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, basis=basis, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=8)
+estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, basis=basis, model=model, EnforceFDT=False, OptimizeDiffusion=True, no_stop=False, max_iter=max_iter, tol=1e-3, n_init=1, random_state=random_state + 1, verbose=2, verbose_interval=1, multiprocessing=8, bgfs=True)
 # We set some initial conditions, check for stability
 # estimator.set_init_coeffs(generator.get_coefficients())
 estimator.fit(X, idx_trajs=idx)
 print(estimator.get_coefficients())
 # np.savez("coeffs.npz", **estimator.get_coefficients())
-
-estimator.set_coefficients(generator.get_coefficients())
-print(estimator.get_coefficients())
+#
+# estimator.set_coefficients(generator.get_coefficients())
+# print(estimator.get_coefficients())
 # plt.plot(estimator.logL[0], label="Log L")
 # plt.legend(loc="upper right")
 # plt.show()
