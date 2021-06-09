@@ -104,6 +104,16 @@ def diagonalC(coeffs, dim_x):
     return A_bis, C_bis
 
 
+def effective_hidden_baths(coeffs, dim_x):
+    """
+    Compute the projected value of the variance for the noise coming from hidden variables
+    """
+
+    Avh = coeffs["A"][:dim_x, dim_x:]
+    SST = np.matmul(coeffs["A"], coeffs["C"]) + np.matmul(coeffs["C"], coeffs["A"].T)
+    return Avh @ SST[dim_x:, dim_x:] @ Avh.T
+
+
 def prony_splitting(coeffs, dim_x):
     """
     Compute the Kernel under prony series form
