@@ -91,27 +91,38 @@ def friction_matrix(coeffs, dim_x):
     return Avv - np.matmul(Avh, np.matmul(np.linalg.inv(Ahh), Ahv))
 
 
-def diagonalC(coeffs, dim_x):
+def hidden_FDT(coeffs, dim_x, kT=None):
     """
     Return A and C after putting C in diagonal form
     """
     C = coeffs["C"]
-    lamb, vect = np.linalg.eigh(C[dim_x:, dim_x:])
-    vect_ext = np.identity(C.shape[0])
-    vect_ext[dim_x:, dim_x:] = vect
-    C_bis = vect_ext.T @ C @ vect_ext
-    A_bis = vect_ext.T @ coeffs["A"] @ vect_ext
-    return A_bis, C_bis
+    if kT is None:  # Either we choose the temperature or we average it from visible variable kT
+        kT = np.trace(C[:dim_x, :dim_x]) / dim_x
+    V = np.linalg.cholesky(C[dim_x:, dim_x:]) / np.sqrt(kT)
+    V_tot = np.identity(C.shape[0])
+    V_tot[dim_x:, dim_x:] = np.linalg.inv(V)
+
+    # V, d, perm = scipy.linalg.ldl(C[dim_x:, dim_x:])  # / np.sqrt(kT)
+    # print(d)
+    # V = V * np.sqrt(np.trace(d) / d.shape[0]) / np.sqrt(kT)
+    # V_tot = np.identity(C.shape[0])
+    # V_tot[dim_x:, dim_x:] = np.linalg.inv(V)
+
+    C_bis = V_tot @ C @ V_tot.T
+    V_inv = np.identity(C.shape[0])
+    V_inv[dim_x:, dim_x:] = V
+    A_bis = V_tot @ coeffs["A"] @ V_inv
+    new_coeffs = {key: coeffs[key] for key in coeffs.keys()}
+    new_coeffs.update({"A": A_bis, "C": C_bis, "SST": np.matmul(A_bis, C_bis) + np.matmul(C_bis, A_bis.T), "kT": kT})
+    return new_coeffs
 
 
-def effective_hidden_baths(coeffs, dim_x):
+def effective_temps_baths(coeffs_init, dim_x):
     """
     Compute the projected value of the variance for the noise coming from hidden variables
     """
-
-    Avh = coeffs["A"][:dim_x, dim_x:]
-    SST = np.matmul(coeffs["A"], coeffs["C"]) + np.matmul(coeffs["C"], coeffs["A"].T)
-    return Avh @ SST[dim_x:, dim_x:] @ Avh.T
+    temps = np.linalg.eigvalsh(hidden_FDT(coeffs_init, dim_x)["C"])
+    return temps, np.mean(temps), (np.max(temps) - np.min(temps)) / np.mean(temps)
 
 
 def prony_splitting(coeffs, dim_x):
