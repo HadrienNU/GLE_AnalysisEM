@@ -33,25 +33,6 @@ import multiprocessing
 model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel, "euler_fv": EulerForceVisibleModel}
 
 
-def scalar_product_localized_basis(traj, dim_x, dim_h, basis):
-    """
-    In case of large number of basis, we have to be a bit more clever
-    """
-    xval = traj[:-1, 2 * dim_x : 3 * dim_x]
-    tree = KDTree(xval)
-    dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
-    bkx = np.zeros((basis.nb_basis_elt_, dim_x))
-    bkdx = np.zeros((basis.nb_basis_elt_, dim_x))
-    bkbk = np.zeros((basis.nb_basis_elt_, basis.nb_basis_elt))
-
-    for elem in basis.elem:
-        ind_loc = tree.query_radius(elem.center, r=elem.size)
-        bk_loc = elem(xval[ind_loc])
-        bkx[elem.index, :] = np.mean(bk_loc[:, :, np.newaxis] * xval[ind_loc, np.newaxis, :], axis=0)
-        bkdx[elem.index, :] = np.mean(bk_loc[:, :, np.newaxis] * dx[ind_loc, np.newaxis, :], axis=0)
-        bkbk[elem.index, :] = np.mean(bk_loc[:, :, np.newaxis] * bk_loc[:, np.newaxis, :], axis=0)
-
-
 def sufficient_stats(traj, dim_x):
     """
     Given a sample of trajectory, compute the averaged values of the sufficient statistics
@@ -540,18 +521,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
         return new_stat
 
-    def _m_step_num(self, sufficient_stat):
-        """
-        Numerical minimization
-        """
-        friction, force, diffusion = self.model_class.m_step_num(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.OptimizeDiffusion, self.OptimizeForce)
-        self.friction_coeffs = friction
-        if self.OptimizeForce:
-            self.force_coeffs = force
-        self.mu0 = sufficient_stat["µ_0"]
-        if self.OptimizeDiffusion:
-            self.diffusion_coeffs = diffusion
-
     def _m_step(self, sufficient_stat):
         """M step.
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
@@ -582,9 +551,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         return np.isfinite(np.sum(self.friction_coeffs)) and np.isfinite(np.sum(self.diffusion_coeffs)) and np.isfinite(np.sum(self.force_coeffs)) and np.isfinite(np.sum(self.mu0)) and np.isfinite(np.sum(self.sig0))
 
-    def _enforce_degeneracy(self):
-        """Apply a basis change to the parameters (hence the hidden variables) to force a specific form of th coefficients"""
-
     def _m_step_markov(self, sufficient_stat_vis):
         """Compute coefficients estimate via Markovian approximation to provide initialization"""
         A_full, C_full = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
@@ -598,15 +564,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.OptimizeDiffusion:
             C_full[: self.dim_x, : self.dim_x] = C
         (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A_full, C_full, self.dt)
-
-    def _get_noise_prop(self, traj):
-        """
-        From current values of parameters, extract remaining noise on visible variables and return its correlation
-        """
-        Xtplus, mutilde, _ = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt)
-
-        noise = Xtplus[:-1, :] - mutilde[:-1, : self.dim_x]
-        return correlation(noise), np.mean(noise)
 
     def loglikelihood(self, suff_datas, dim_h=None):
         """
@@ -660,9 +617,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 new_stat += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
         lower_bound = self.loglikelihood(new_stat)
         return lower_bound
-
-    def fisher_error():
-        """Compute asymptotic Fisher Information matrix to provide error estimate"""
 
     def predict(self, X, idx_trajs=[]):
         """Predict the hidden variables for the data samples in X using trained model.
@@ -801,32 +755,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         (self.force_coeffs, self.mu0, self.sig0) = (coeffs["force"], coeffs["µ_0"], coeffs["Σ_0"])
         if with_basis:
             self.basis.set_coefficients(coeffs["basis"])
-
-    def vectorization_coefficients(self):
-        """
-        Return all current coefficients under a vector form
-        """
-        vect = self.friction_coeffs.ravel()
-        vect = np.hstack((vect, self.mu0))
-        if self.OptimizeForce:
-            vect = np.hstack((vect, self.force_coeffs.ravel()))
-        if self.OptimizeDiffusion:
-            vect = np.hstack((vect, self.diffusion_coeffs.ravel()))
-        return vect
-
-    def unvectorization_coefficient(self, vect_c):
-        """
-        Set estimator coefficient to value given by the vector
-        """
-        friction, remaining = np.split(vect_c, [(self.dim_x + self.dim_h) ** 2])
-        self.friction_coeffs = friction.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
-        self.mu0, remaining = np.split(remaining, [self.dim_h])
-        if self.OptimizeForce:
-            force, remaining = np.split(remaining, [self.dim_x * self.dim_coeffs_force])
-            self.force_coeffs = force.reshape((self.dim_x, self.dim_coeffs_force))
-        if self.OptimizeDiffusion:
-            diffusion, remaining = np.split(remaining, [(self.dim_x + self.dim_h) ** 2])
-            self.diffusion_coeffs = diffusion.reshape((self.dim_x + self.dim_h, self.dim_x + self.dim_h))
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
