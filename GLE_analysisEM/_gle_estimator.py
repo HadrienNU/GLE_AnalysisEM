@@ -930,8 +930,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _print_verbose_msg_fit_end(self, ll, best_init, best_iter):
         """Print verbose message on the end of iteration."""
         if self.verbose == 1:
-            print("Fit converged: %s Init: %s at step %i \t ll %.5f" % (self.converged_, best_init, best_iter, ll))
+            print("Fit converged: %s Init: %s at step %i \t ll %.10f" % (self.converged_, best_init, best_iter, ll))
         elif self.verbose >= 2:
-            print("Fit converged: %s Init: %s at step %i \t time lapse %.5fs\t ll %.5f" % (self.converged_, best_init, best_iter, time() - self._init_prev_time, ll))
+            print("Fit converged: %s Init: %s at step %i \t time lapse %.5fs\t ll %.10f" % (self.converged_, best_init, best_iter, time() - self._init_prev_time, ll))
             print("----------------Fitted parameters values------------------")
             print(self.get_coefficients())
