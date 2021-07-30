@@ -62,9 +62,9 @@ def memory_kernel_logspace(dt, coeffs, dim_x, noDirac=False):
     Avh = coeffs["A"][:dim_x, dim_x:]
     Ahh = coeffs["A"][dim_x:, dim_x:]
     eigs = np.linalg.eigvals(Ahh)
-    Kernel = np.zeros((150, dim_x, dim_x))
+    Kernel = np.zeros((500, dim_x, dim_x))
     final_time = 25 / np.min(np.abs(np.real(eigs)))
-    times = np.logspace(np.log10(dt), np.log10(final_time), num=150)
+    times = np.logspace(np.log10(dt), np.log10(final_time), num=500)
     for n, t in enumerate(times):
         Kernel[n, :, :] = -np.matmul(Avh, np.matmul(scipy.linalg.expm(-1 * t * Ahh), Ahv))
     if not noDirac:
