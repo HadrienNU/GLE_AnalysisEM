@@ -26,9 +26,6 @@ class Markov_Estimator(GLE_Estimator):
     OptimizeDiffusion: bool, default=True
         Optimize or not the diffusion coefficients
 
-    EnforceFDT: bool, default =False
-        Enforce the fluctuation-dissipation theorem
-
     no_stop: bool, default to False
         Does not stop the iterations if the algorithm have converged
 
@@ -63,7 +60,6 @@ class Markov_Estimator(GLE_Estimator):
             max_iter=1,
             OptimizeForce=OptimizeForce,
             OptimizeDiffusion=OptimizeDiffusion,
-            EnforceFDT=EnforceFDT,
             init_params="random",
             model=model,
             A_init=A_init,
