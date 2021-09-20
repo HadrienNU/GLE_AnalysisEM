@@ -43,10 +43,8 @@ And the documentation will be available in
 
   doc/_build/html/index.html
 
-Note personnelle: Le module est juste installé via un lien symbolique dans ~/.local/lib/python3.8/site-packages/GLE_analysisEM
-
-To compile the fortran part
+To compile the fortran code
 
 .. code-block:: sh
-
+  cd GLE_analysisEM/
   f2py3 -c -m _filter_smoother FilterSmoother.f90 -llapack

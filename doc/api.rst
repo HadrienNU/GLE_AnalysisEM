@@ -30,7 +30,7 @@ Helper functions
    :toctree: generated/
    :template: function.rst
    
-   GLE_analysisEM.utils.loadTestDatas_est
+   GLE_analysisEM.datas_loaders.loadTestDatas_est
    
-   GLE_analysisEM.utils.memory_kernel
+   GLE_analysisEM.post_processing.memory_kernel
 

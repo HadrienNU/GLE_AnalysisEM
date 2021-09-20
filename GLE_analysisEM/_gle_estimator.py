@@ -11,12 +11,9 @@ from sklearn.base import BaseEstimator, DensityMixin
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_random_state, check_array
 from sklearn.exceptions import ConvergenceWarning
-from sklearn.neighbors import KDTree
 
 from .random_matrix import generateRandomDefPosMat
-from .post_processing import correlation
-from ._aboba_model import ABOBAModel
-from ._euler_model import EulerModel, EulerNLModel, EulerFixMarkovModel, EulerForceVisibleModel
+from ._euler_model import EulerForceVisibleModel
 
 from ._gle_basis_projection import GLE_BasisTransform
 
@@ -30,7 +27,7 @@ except ImportError as err:
 
 import multiprocessing
 
-model_class = {"aboba": ABOBAModel, "euler": EulerModel, "euler_noiseless": EulerNLModel, "euler_fix_markov": EulerFixMarkovModel, "euler_fv": EulerForceVisibleModel}
+model_class = {"euler": EulerForceVisibleModel}
 
 
 def sufficient_stats(traj, dim_x):
@@ -146,7 +143,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             'random' : coefficients are initialized randomly.
 
     model : {}, default to 'euler'.
-        Model to be fitted
+        Choice of time discretized model to be fitted
 
     basis: a scikit-learn Transformer class, default to linear basis.
         Transformer to get value of the basis function
@@ -437,7 +434,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             # Algorithm loop
             for n_iter in range(1, self.max_iter + 1):
                 prev_lower_bound = lower_bound
-                self._enforce_degeneracy()
                 new_stat = self._e_step_stats(traj_list, datas_visible)
 
                 # new_stat_rs = self._rescale_hidden(new_stat)

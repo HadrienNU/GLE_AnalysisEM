@@ -22,14 +22,13 @@ def dV(X):
     return -4 * a * np.power(X, 3) + 2 * b * X
 
 
-# generator = GLE_Estimator(verbose=1, EnforceFDT=False, C_init=np.identity(2), A_init=np.array([[5, 1.0], [-2.0, 0.07]]), force_init=np.array([-1]), mu_init=np.zeros((1,)), sig_init=np.zeros((1, 1)), init_params="user")
 dim_x = 1
 dim_h = 1
 model = "euler"
 force = np.identity(dim_x)
 
 basis = GLE_BasisTransform(transformer=FunctionTransformer(dV))
-generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, EnforceFDT=True, force_init=force, init_params="random", multiprocessing=4)
+generator = GLE_Estimator(verbose=1, dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, force_init=force, init_params="random", multiprocessing=4)
 X, idx, h = generator.sample(n_samples=5000, x0=0.0, v0=0.0)
 print(generator.get_coefficients())
 for n in range(dim_h):

@@ -9,8 +9,6 @@ Plot obtained values of the parameters versus the actual ones
 import numpy as np
 from matplotlib import pyplot as plt
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
-
-from GLE_analysisEM import Markov_Estimator
 from GLE_analysisEM.post_processing import memory_kernel, forcefield, forcefield_plot2D, correlation, memory_timescales
 
 from sklearn.preprocessing import FunctionTransformer
@@ -29,7 +27,6 @@ def dV(X):
 dim_x = 1
 dim_h = 3
 random_state = None
-model = "euler_fv"
 force = -np.identity(dim_x)
 # force = [[-0.25, -1], [1, -0.25]]
 A = np.array([[5e-2, -1.0], [1.0, 0.1]])
@@ -38,7 +35,7 @@ A = np.array([[5e-2, -1.0], [1.0, 0.1]])
 pot_gen = GLE_BasisTransform(basis_type="linear")
 pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, basis=pot_gen, force_init=force, EnforceFDT=True, init_params="random", model=model, random_state=random_state)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, basis=pot_gen, force_init=force, init_params="random", random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0)
 print(generator.get_coefficients())
 
@@ -46,7 +43,7 @@ print(generator.get_coefficients())
 # ------ Estimation ------#
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="free_energy_kde")
-estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, model=model, basis=basis, force_init=[1.0], n_init=3, EnforceFDT=False, OptimizeForce=False, random_state=7, tol=1e-8, no_stop=False, max_iter=1000, multiprocessing=8)
+estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, basis=basis, force_init=[1.0], n_init=3, OptimizeForce=False, random_state=7, tol=1e-8, no_stop=False, max_iter=1000, multiprocessing=8)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 print("---- Real ones ----")

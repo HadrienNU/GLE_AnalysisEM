@@ -4,7 +4,7 @@ Parameters estimation
 ===========================
 
 An example plot of :class:`GLE_analysisEM.utils`
-Plot obtained values of the parameters versus the actual ones
+Plot obtained values of the parameters versus the actual ones when the parameters are estimated from a Markov model
 """
 import numpy as np
 from matplotlib import pyplot as plt
@@ -30,7 +30,6 @@ def dV(X):
 dim_x = 1
 dim_h = 1
 random_state = None
-model = "aboba"
 force = -np.identity(dim_x)
 # force = [[-0.25, -1], [1, -0.25]]
 A = np.array([[5e-2, -1.0], [1.0, 0.1]])
@@ -39,7 +38,7 @@ A = np.array([[5e-2, -1.0], [1.0, 0.1]])
 # pot_gen = GLE_BasisTransform(basis_type="linear")
 pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
 # pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
-generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=2, basis=pot_gen, EnforceFDT=True, init_params="random", force_init=force, model=model, random_state=random_state)
+generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=2, basis=pot_gen, init_params="random", force_init=force, random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0)
 print("---- Real ones ----")
 print(generator.get_coefficients())
@@ -52,7 +51,7 @@ plt.show()
 # ------ Estimation ------#
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="polynomial", degree=3).fit(X[1 : 1 + dim_x])
-estimator = Markov_Estimator(init_params="random", verbose=2, verbose_interval=1, dim_x=dim_x, model=model, basis=basis, n_init=1, EnforceFDT=False, OptimizeForce=True, random_state=7)
+estimator = Markov_Estimator(init_params="random", verbose=2, verbose_interval=1, dim_x=dim_x, basis=basis, n_init=1, OptimizeForce=True, random_state=7)
 estimator.fit(X, idx_trajs=idx)
 # print(estimator.get_coefficients())
 
