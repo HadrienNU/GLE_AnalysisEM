@@ -95,7 +95,7 @@ def simulated_vacf(estimator, basis):
     Get vacf via numericall simulation of the model
     """
     Ntrajs = 50
-    X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs, basis=basis)
+    X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs)
     traj_list = np.split(X, idx)
     vacf = 0.0
     for n, trj in enumerate(traj_list):

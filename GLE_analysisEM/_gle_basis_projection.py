@@ -1,5 +1,5 @@
 """
-This the main estimator module
+Contain tools for basis projection
 """
 import numpy as np
 from itertools import chain, combinations
