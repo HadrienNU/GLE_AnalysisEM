@@ -6,14 +6,8 @@
 Welcome to GLE_AnalysisEM's documentation!
 ============================================
 
-This project is implementation of Expectation-Maximumization algorithm for the inference of Generalized Langevin Equations.
+This project is implementation of Expectation-Maximization algorithm for the inference of Generalized Langevin Equations. Please refer to XXX for a detailed description of the algorithm.
 
-.. toctree::
-   :maxdepth: 2
-   :hidden:
-   :caption: Getting Started
-
-   quick_start
 
 .. toctree::
    :maxdepth: 2
@@ -29,23 +23,23 @@ This project is implementation of Expectation-Maximumization algorithm for the i
    :caption: Tutorial - Examples
 
    auto_examples/index
+   
+.. note::
 
-`Getting started <quick_start.html>`_
--------------------------------------
+    Installing the library is as simple as running
 
-Information regarding this template and how to modify it for your own project.
+    .. code-block:: bash
+
+        pip install git+https://github.com/HadrienNU/GLE_AnalysisEM.git
 
 `User Guide <user_guide.html>`_
 -------------------------------
 
-An example of narrative documentation.
 
 `API Documentation <api.html>`_
 -------------------------------
 
-The details of the API.
 
 `Examples <auto_examples/index.html>`_
 --------------------------------------
 
-A set of examples. It complements the `User Guide <user_guide.html>`_.

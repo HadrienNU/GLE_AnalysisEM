@@ -70,14 +70,15 @@ def loadDatas_est(paths, dim_x, maxlenght=None):
 
 
 def loadDatas_pos(paths, dim_x, maxlenght=None):
-    """Loads some test trajectories
+    """Loads trajectories from a list of file
 
     Parameters
     ----------
     paths : list of str
         List of paths to trajectory files, one trajectory per file
+        The file are loaded with ``numpy.loadtxt`` and should have one column by dimension and one data point per line.
     dim_x : int
-        Visible dimension
+        Number of column to take from each file
     """
 
     X = None

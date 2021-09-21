@@ -6,15 +6,7 @@ Running GLE Estimator
 An example of how to run estimation :class:`GLE_analysisEM.GLE_Estimator`
 """
 import numpy as np
-import pandas as pd
 from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform
-
-
-# Printing options
-pd.set_option("display.max_rows", None)
-pd.set_option("display.max_columns", None)
-pd.set_option("display.width", None)
-pd.set_option("display.max_colwidth", None)
 
 dim_x = 1
 dim_h = 1

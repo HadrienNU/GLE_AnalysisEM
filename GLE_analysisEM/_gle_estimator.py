@@ -113,7 +113,6 @@ def e_step_worker_pool(est, traj, datas_visible, N):
 
 class GLE_Estimator(DensityMixin, BaseEstimator):
     """A GLE estimator based on Expectation-Maximation algorithm.
-        We consider that the free energy have been estimated before and constant values of friction and diffusion coefficients are fitted
 
     Parameters
     ----------
@@ -135,15 +134,16 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     OptimizeDiffusion: bool, default=True
         Optimize or not the diffusion coefficients
 
-    init_params : {'markov', 'user','random'}, defaults to 'random'.
+    init_params : {'user','random','markov'}, defaults to 'random'.
 
         The method used to initialize the fitting coefficients.
         Must be one of::
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
+            'markov' : coefficients are initialized with Markovian estimation of the visible part
 
     model : {}, default to 'euler'.
-        Choice of time discretized model to be fitted
+        Choice of time discretized model to be fitted. For now only euler model is implemented
 
     basis: a scikit-learn Transformer class, default to linear basis.
         Transformer to get value of the basis function
@@ -379,9 +379,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
-            List of trajectories. Each row
-            corresponds to a single trajectory.
+        X : array-like, shape (n_samples, dim_x)
+            List of positions data.
         idx_trajs: array, default []
             Location of split if multiple trajectory are inputed
 
@@ -580,14 +579,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
-            List of n_features-dimensional data points. Each row
-            corresponds to a single data point.
+        X : array-like, shape (n_samples, dim_x)
+            List of positions data.
+        idx_trajs: array, default []
+            Location of split if multiple trajectory are inputed
 
         Returns
         -------
         log_likelihood : float
-            Log likelihood of the Gaussian mixture given X.
+            Log likelihood of the generalized Langevin model given X.
         """
         check_is_fitted(self, "initialized_")
         X = check_array(X, ensure_min_samples=4, ensure_min_features=self.dim_x)
@@ -619,14 +619,15 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
-            List of n_features-dimensional data points. Each row
-            corresponds to a single data point.
+        X : array-like, shape (n_samples, dim_x)
+            List of positions data.
+        idx_trajs: array, default []
+            Location of split if multiple trajectory are inputed
 
         Returns
         -------
-        labels : array, shape (n_samples,)
-            Component labels.
+        muh : array, shape (n_samples,dim_h)
+            Average value of the hidden variables given current estimation of the parameters and provided trajectories.
         """
         check_is_fitted(self, "converged_")
         X = check_array(X, ensure_min_samples=4, ensure_min_features=self.dim_x)
@@ -654,12 +655,18 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Number of trajectory to generate
         x0,v0 : array-like, optionnal
             Initial value of the trajectory
+        dt : float, default = 5e-3
+            Timestep to use for the integration
+        burnout : int, default to 0
+            Remove [burnout] step from the start of the trajectories
+        rng: random number generator
+            Provide if wanted a random number generator. See numpy documention about RNG
 
         Returns
         -------
         X : array, shape (n_samples, n_features)
             Randomly generated trajectory
-        idx: array
+        idx : array
             Index of the trajectories
         y : array, shape (nsamples,)
             Hidden variables values

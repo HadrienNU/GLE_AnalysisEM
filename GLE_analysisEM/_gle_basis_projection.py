@@ -17,6 +17,8 @@ from ._basis_features import LinearFeatures, BinsFeatures, BSplineFeatures
 
 
 def _combinations(n_features, degree, interaction_only, include_bias):
+    """To get combinaison of features
+    """
     comb = combinations if interaction_only else combinations_w_r
     start = int(not include_bias)
     return chain.from_iterable(comb(range(n_features), i) for i in range(start, degree + 1))
@@ -30,9 +32,6 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
     dim_x : int, default=1
         The number of visible dimensions.
 
-    model : str, default= "aboba"
-        The statistical model to use
-
     basis_type : str, default= "linear"
         Give the wanted basis projection
         Must be one of::
@@ -41,14 +40,6 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
             "bins" : Bins basis.
             "bsplines" : BSplines basis.
             "custom": custom basis, you should pass a Transformer class
-
-    degree : int, default=1
-        The number of basis element to consider
-
-    Attributes
-    ----------
-    basis_type_  : str
-        The type of the basis.
     """
 
     def __init__(self, basis_type="linear", transformer=None, **kwargs):

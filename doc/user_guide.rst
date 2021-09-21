@@ -7,70 +7,56 @@ User guide: EM estimator for Generalized Langevin Equations
 ==================================================================================
 
 EM Estimator
----------
+------------
 
 The central piece of the package is the :class:`GLE_analysisEM.GLE_Estimator`. All estimators in scikit-learn are derived
 from this class. In more details, this base class enables to set and get
 parameters of the estimator. It can be imported as::
 
-    >>> from sklearn.base import BaseEstimator
+    >>> from GLE_analysisEM import GLE_Estimator
 
-Once imported, you can create a class which inherate from this base class::
+Once imported, lauching the estimation is as simple as ::
 
-    >>> class MyOwnEstimator(BaseEstimator):
-    ...     pass
+    >>> estimator = GLE_Estimator(dim_x=dim_x, dim_h=dim_h, basis=basis)
+    >>> estimator.fit(X, idx_trajs=idx)
 
-Transformer
------------
+Several parameters are available. At least ``dim_x`` that give the dimension of the system under study and ``dim_h`` that give the number of hidden dimension to fit should be provided. 
+A functional basis for fitting of the mean force is also required and is explained below.
 
-Transformers are scikit-learn estimators which implement a ``transform`` method.
-The use case is the following:
+The trajectories data are provided to the ``GLE_analysisEM.fit`` function as ``X`` and ``idx`` under a format that is explained below.
 
-* at ``fit``, some parameters can be learned from ``X`` and ``y``;
-* at ``transform``, `X` will be transformed, using the parameters learned
-  during ``fit``.
+Once fitted (that can be quite long), the estimated parameters can be obtained as a dictionary ::
 
-.. _mixin: https://en.wikipedia.org/wiki/Mixin
+    >>> estimator.get_coefficients()
 
-In addition, scikit-learn provides a
-mixin_, i.e. :class:`sklearn.base.TransformerMixin`, which
-implement the combination of ``fit`` and ``transform`` called ``fit_transform``
+Functional basis
+-----------------
 
+In GLE_analysisEM, the mean force term is fitted on a functional basis that should be provided to :class:`GLE_analysisEM.GLE_Estimator`. 
+Functional basis are implemented in :class:`GLE_analysisEM.GLE_BasisTransform` that could be imported  and initialized as ::
 
-Therefore, when creating a transformer, you need to create a class which
-inherits from both :class:`sklearn.base.BaseEstimator` and
-:class:`sklearn.base.TransformerMixin`. The scikit-learn API imposed ``fit`` to
-**return ``self``**. The reason is that it allows to pipeline ``fit`` and
-``transform`` imposed by the :class:`sklearn.base.TransformerMixin`. The
-``fit`` method is expected to have ``X`` and ``y`` as inputs. Note that
-``transform`` takes only ``X`` as input and is expected to return the
-transformed version of ``X``::
+    >>> from GLE_analysisEM import GLE_BasisTransform
+    >>> basis = GLE_BasisTransform(basis_type="linear")
 
-    >>> class MyOwnTransformer(BaseEstimator, TransformerMixin):
-    ...     def fit(self, X, y=None):
-    ...         return self
-    ...     def transform(self, X):
-    ...         return X
+Several option are available for the type of basis, please refer to the documentation of  :class:`GLE_analysisEM.GLE_BasisTransform`.  Some type required the basis to be fitted from the data a priori using ::
+    >>> basis = GLE_BasisTransform(basis_type="free_energy").fit(X)
+    
+Trajectory format
+-----------------
 
-We build a basic example to show that our :class:`MyOwnTransformer` is working
-within a scikit-learn ``pipeline``::
-
-    >>> from sklearn.datasets import load_iris
-    >>> from sklearn.pipeline import make_pipeline
-    >>> from sklearn.linear_model import LogisticRegression
-    >>> X, y = load_iris(return_X_y=True)
-    >>> pipe = make_pipeline(MyOwnTransformer(),
-    ...                      LogisticRegression(random_state=10,
-    ...                                         solver='lbfgs'))
-    >>> pipe.fit(X, y)  # doctest: +ELLIPSIS
-    Pipeline(...)
-    >>> pipe.predict(X)  # doctest: +ELLIPSIS
-    array([...])
+The trajectories should be pass as a single array of the shape (Ndatas x dim). 
+If multiple trajectories shoud be provided, all trajectories should be stacked together and another array that contain the indices to split the array should be provided (passed to numpy.split).
+Helpers function that load trajectories from files (one file per trajectories) are provided in :class:`GLE_analysisEM.data_loaders`.
 
 
+Generation of new trajectories
+-----------------------------
+Once the estimator is converged, it can be used to generate new trajectories with ``GLE_analysisEM.sample``.
 
 
-TODO List
----------
+Predict value of the hidden variables
+-------------------------------------
 
-.. todolist::
+An estimation of the value of the hidden variable can be obtained with ``GLE_analysisEM.predict``
+
+
