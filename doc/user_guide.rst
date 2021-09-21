@@ -38,7 +38,8 @@ Functional basis are implemented in :class:`GLE_analysisEM.GLE_BasisTransform` t
     >>> from GLE_analysisEM import GLE_BasisTransform
     >>> basis = GLE_BasisTransform(basis_type="linear")
 
-Several option are available for the type of basis, please refer to the documentation of  :class:`GLE_analysisEM.GLE_BasisTransform`.  Some type required the basis to be fitted from the data a priori using ::
+Several options are available for the type of basis, please refer to the documentation of  :class:`GLE_analysisEM.GLE_BasisTransform`.  Some type required the basis to be fitted from the data a priori using ::
+    
     >>> basis = GLE_BasisTransform(basis_type="free_energy").fit(X)
     
 Trajectory format
@@ -50,7 +51,7 @@ Helpers function that load trajectories from files (one file per trajectories) a
 
 
 Generation of new trajectories
------------------------------
+------------------------------
 Once the estimator is converged, it can be used to generate new trajectories with ``GLE_analysisEM.sample``.
 
 

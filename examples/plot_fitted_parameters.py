@@ -25,29 +25,23 @@ def dV(X):
 
 
 dim_x = 1
-dim_h = 3
+dim_h = 2
 random_state = None
 force = -np.identity(dim_x)
 # force = [[-0.25, -1], [1, -0.25]]
 A = np.array([[5e-2, -1.0], [1.0, 0.1]])
 
 # ------ Generation ------#
-pot_gen = GLE_BasisTransform(basis_type="linear")
+# pot_gen = GLE_BasisTransform(basis_type="linear")
 pot_gen = GLE_BasisTransform(transformer=FunctionTransformer(dV))
-# pot_gen_polynom = GLE_BasisTransform(basis_type="polynomial", degree=3)
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, basis=pot_gen, force_init=force, init_params="random", random_state=random_state)
 X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0)
-print(generator.get_coefficients())
-
 
 # ------ Estimation ------#
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="free_energy_kde")
-estimator = GLE_Estimator(init_params="random", verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, basis=basis, force_init=[1.0], n_init=3, OptimizeForce=False, random_state=7, tol=1e-8, no_stop=False, max_iter=1000, multiprocessing=8)
+estimator = GLE_Estimator(verbose=2, verbose_interval=10, dim_x=dim_x, dim_h=dim_h, basis=basis, n_init=1, random_state=7, tol=1e-7, no_stop=False, max_iter=100, multiprocessing=8)
 estimator.fit(X, idx_trajs=idx)
-# print(estimator.get_coefficients())
-print("---- Real ones ----")
-print(generator.get_coefficients())
 
 # ------ Plotting ------#
 fig, axs = plt.subplots(2, 2)
@@ -96,7 +90,7 @@ def simulated_vacf(estimator):
     """
     Get vacf via numericall simulation of the model
     """
-    Ntrajs = 50
+    Ntrajs = 5
     X, idx, Xh = estimator.sample(n_samples=10000, n_trajs=Ntrajs)
     traj_list = np.split(X, idx)
     vacf = 0.0

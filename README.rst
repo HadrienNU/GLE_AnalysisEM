@@ -46,5 +46,6 @@ And the documentation will be available in
 To compile the fortran code
 
 .. code-block:: sh
+
   cd GLE_analysisEM/
   f2py3 -c -m _filter_smoother FilterSmoother.f90 -llapack

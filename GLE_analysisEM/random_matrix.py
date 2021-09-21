@@ -62,14 +62,3 @@ def random_gen_bruteforce(dim_x=1, dim_h=1, rng=np.random.default_rng(), max_ev=
             notFound = False
     # print("Brute force", n, np.linalg.eigvals(A))
     return A
-
-
-def oldrandom_gen(dim_x=1, dim_h=1, rng=np.random.default_rng()):
-    """
-    Old code for generating random matrix
-    """
-    A = 4 * rng.standard_normal(size=(dim_x + dim_h, dim_x + dim_h))
-    # A[dim_x:, :dim_x] = 1
-    if not np.all(np.linalg.eigvals(A + A.T) > 0):
-        A += np.abs(0.505 * np.min(np.linalg.eigvals(A + A.T))) * np.identity(dim_x + dim_h)
-    return A

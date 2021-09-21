@@ -256,10 +256,3 @@ def forcefield_plot2D(x_lims, basis, force_coeffs):
     force_field = np.matmul(force_coeffs, basis.transform(X).T).T
     f = force_field.reshape(x_lims[0][2], x_lims[1][2], 2)
     return x, y, f[:, :, 0], f[:, :, 1]
-
-
-def potential_reconstruction_1D(x_lims, basis, force_coeffs):
-    """From the force field reconstruct the potential"""
-    x = np.linspace(x_lims[0][0], x_lims[0][1], int(x_lims[0][2]))
-    sol = scipy.integrate.odeint(lambda y, t: -np.matmul(force_coeffs, basis.transform(np.array([t]).reshape(-1, 1)).T)[0, 0], [0.0], x)
-    return x, sol[:, 0]

@@ -146,31 +146,6 @@ class LinearElement(object):
         return ((x >= self.x_left) & (x < self.x_center)) * (x - self.x_left) / (self.x_center - self.x_left) + ((x >= self.x_center) & (x < self.x_right)) * (self.x_right - x) / (self.x_right - self.x_center)
 
 
-class FEM1DFeatures(TransformerMixin):
-    def __init__(self, mesh, periodic=False):
-        self.periodic = periodic
-        # Add two point for start and end point
-        extra_point_start = 2 * mesh.x[0] - mesh.x[1]
-        extra_point_end = 2 * mesh.x[-1] - mesh.x[-2]
-        x_dat = np.concatenate((np.array([extra_point_start]), mesh.x, np.array([extra_point_end])))
-        # Create list of instances of Element
-        self.elements = [LinearElement(i, x_dat[i], x_dat[i + 1], x_dat[i + 2]) for i in range(len(x_dat) - 2)]
-        self.num_elements = len(self.elements)
-
-    def fit(self, X, y=None):
-        self.tree = KDTree(X)
-        return self
-
-    def transform(self, X):
-        nsamples, nfeatures = X.shape
-        features = np.zeros((nsamples, self.num_elements))
-        for k, element in enumerate(self.elements):
-            istart = k  # * nfeatures
-            iend = k + 1  # * nfeatures
-            features[:, istart:iend] = element.basis_function(X)
-        return features
-
-
 class LinearFeatures(TransformerMixin):
     def __init__(self, to_center=False):
         """

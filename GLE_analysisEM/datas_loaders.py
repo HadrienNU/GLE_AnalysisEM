@@ -5,71 +5,7 @@ import numpy as np
 from sklearn.model_selection import ShuffleSplit
 
 
-def loadTestDatas_est(paths, dim_x, dim_h):
-    """Loads some test trajectories with known hidden variables
-
-    Parameters
-    ----------
-    paths : list of str
-        List of paths to trajectory files, one trajectory per file
-    dim_x : int
-        Visible dimension
-    dim_h : int
-        Hidden dimension
-    """
-
-    X = None
-    idx_trajs = []
-    X_h = None
-
-    for chemin in paths:
-        trj = np.loadtxt(chemin)
-        txv = np.asarray(trj[:, : 1 + 2 * dim_x])
-        h = np.asarray(trj[:, 1 + 2 * dim_x : 1 + 2 * dim_x + dim_h])
-        if X is None:
-            X = txv
-        else:
-            idx_trajs.append(len(X))
-            X = np.vstack((X, txv))
-
-        if X_h is None:
-            X_h = h
-        else:
-            X_h = np.vstack((X_h, h))
-
-    return X, idx_trajs, X_h
-
-
-def loadDatas_est(paths, dim_x, maxlenght=None):
-    """Loads some test trajectories
-
-    Parameters
-    ----------
-    paths : list of str
-        List of paths to trajectory files, one trajectory per file
-    dim_x : int
-        Visible dimension
-    """
-
-    X = None
-    idx_trajs = []
-
-    for chemin in paths:
-        trj = np.loadtxt(chemin)
-        if maxlenght is None:
-            txv = np.asarray(trj[:, : 1 + 2 * dim_x])
-        else:
-            txv = np.asarray(trj[:maxlenght, : 1 + 2 * dim_x])
-        if X is None:
-            X = txv
-        else:
-            idx_trajs.append(len(X))
-            X = np.vstack((X, txv))
-
-    return X, idx_trajs
-
-
-def loadDatas_pos(paths, dim_x, maxlenght=None):
+def loadData(paths, dim_x, maxlenght=None):
     """Loads trajectories from a list of file
 
     Parameters
@@ -130,7 +66,7 @@ def split_loadDatas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, ra
     nppaths = np.asarray(paths)
     ss = ShuffleSplit(n_splits=n_splits, test_size=test_size, train_size=train_size, random_state=random_state)
     for train_index, test_index in ss.split(paths):
-        yield loadDatas_est(nppaths[train_index], dim_x)
+        yield loadData(nppaths[train_index], dim_x)
 
 
 def bootstrap_Datas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, random_state=np.random.default_rng()):
@@ -142,4 +78,4 @@ def bootstrap_Datas(paths, dim_x, n_splits=5, test_size=None, train_size=0.9, ra
     number_paths = int(np.floor(train_size * len(nppaths)))
     for n in range(n_splits):
         paths_n = random_state.choice(nppaths, size=number_paths, replace=True)
-        yield loadDatas_est(paths_n, dim_x)
+        yield loadData(paths_n, dim_x)

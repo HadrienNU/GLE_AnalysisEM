@@ -12,7 +12,6 @@ dim_x = 1
 dim_h = 1
 random_state = 42
 force = -np.identity(dim_x)
-max_iter = 200
 
 ntrajs = 25
 
@@ -23,8 +22,9 @@ generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, force_init=force,
 X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0)
 print("Real parameters", generator.get_coefficients())
 
-basis = GLE_BasisTransform(basis_type="free_energy")
+
 # Estimation of parameters
-estimator = GLE_Estimator(init_params="random", dim_x=dim_x, dim_h=dim_h, basis=basis, OptimizeDiffusion=True, no_stop=True, max_iter=max_iter, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50, multiprocessing=8)
+basis = GLE_BasisTransform(basis_type="free_energy")  # Choice of basis for mean force
+estimator = GLE_Estimator(dim_x=dim_x, dim_h=dim_h, basis=basis, max_iter=100, n_init=1, random_state=random_state + 1, verbose=1, verbose_interval=50)
 estimator.fit(X, idx_trajs=idx)
 print("Estimated parameters", estimator.get_coefficients())

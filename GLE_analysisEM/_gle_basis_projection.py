@@ -33,12 +33,15 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         The number of visible dimensions.
 
     basis_type : str, default= "linear"
-        Give the wanted basis projection
+        Give the type of basis projection
         Must be one of::
+
             "linear" : Linear basis.
             "polynomial" : Polynomial basis.
             "bins" : Bins basis.
             "bsplines" : BSplines basis.
+            "free_energy" : Use histogram estimation of the free energy as unique basis function.
+            "free_energy_kde" : Use Kernel Density estimation of the free energy as unique basis function.
             "custom": custom basis, you should pass a Transformer class
     """
 
@@ -177,8 +180,7 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         return combX[:, :]
 
     def transform(self, X):
-        """A reference implementation of a transform function.
-        Take the position as input and output basis expansion
+        """Take the position as input and output basis expansion
 
         Parameters
         ----------
@@ -205,8 +207,8 @@ class GLE_BasisTransform(TransformerMixin, BaseEstimator):
         return bk
 
     def orthogonal_projection(self, X, y=None):
-        """
-        Get coefficients of the affine projection on the basis
+        """Get coefficients of the affine projection on the basis
+
         Parameters
         ----------
         X : {array-like, sparse-matrix}, shape (n_samples, n_features)

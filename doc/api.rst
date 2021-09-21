@@ -2,7 +2,7 @@
 GLE_AnalysisEM API
 ####################
 
-This is an example on how to document the API of your own project.
+This section contains API documentation for the most commonly used interfaces of the library.
 
 .. currentmodule:: GLE_analysisEM
 
@@ -30,7 +30,7 @@ Helper functions
    :toctree: generated/
    :template: function.rst
    
-   GLE_analysisEM.datas_loaders.loadTestDatas_est
+   GLE_analysisEM.datas_loaders.loadData
    
    GLE_analysisEM.post_processing.memory_kernel
 

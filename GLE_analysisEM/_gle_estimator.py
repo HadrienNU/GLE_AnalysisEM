@@ -22,7 +22,7 @@ try:
     from ._filter_smoother import filtersmoother
 except ImportError as err:
     print(err)
-    warnings.warn("Python fallback will been used for filtersmoother module.")
+    warnings.warn("Python fallback will been used for filtersmoother module. Consider compiling the fortran module")
     from ._kalman_python import filtersmoother
 
 import multiprocessing
@@ -138,6 +138,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         The method used to initialize the fitting coefficients.
         Must be one of::
+
             'user' : coefficients are initialized at values provided by the user
             'random' : coefficients are initialized randomly.
             'markov' : coefficients are initialized with Markovian estimation of the visible part
@@ -162,9 +163,6 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         If 'warm_start' is True, the solution of the last fitting is used as
         initialization for the next call of fit(). This can speed up
         convergence when fit is called several times on similar problems.
-        In that case, 'n_init' is ignored and only a single initialization
-        occurs upon the first call.
-        See :term:`the Glossary <warm_start>`.
 
     random_state : int, RandomState instance or None, optional (default=None)
         Controls the random seed given to the method chosen to initialize the

@@ -29,8 +29,8 @@ pot_gen = GLE_BasisTransform(basis_type="linear")
 
 # Trajectory generation
 generator = GLE_Estimator(verbose=2, dim_x=dim_x, dim_h=dim_h, force_init=force, init_params="random", basis=pot_gen, random_state=random_state)
-X, idx, Xh = generator.sample(n_samples=10000, n_trajs=ntrajs, x0=0.0, v0=0.0)
-X_val, idx_val, Xh_val = generator.sample(n_samples=10000, n_trajs=10, x0=0.0, v0=0.0)
+X, idx, Xh = generator.sample(n_samples=5000, n_trajs=ntrajs, x0=0.0, v0=0.0)
+X_val, idx_val, Xh_val = generator.sample(n_samples=5000, n_trajs=10, x0=0.0, v0=0.0)
 print("Real parameters", generator.get_coefficients())
 
 initial_ll = generator.score(X, idx_trajs=idx)
