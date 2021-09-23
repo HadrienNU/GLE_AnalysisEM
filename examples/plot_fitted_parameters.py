@@ -3,7 +3,6 @@
 Parameters estimation
 ===========================
 
-An example plot of :class:`GLE_analysisEM.utils`
 Plot obtained values of the parameters versus the actual ones
 """
 import numpy as np

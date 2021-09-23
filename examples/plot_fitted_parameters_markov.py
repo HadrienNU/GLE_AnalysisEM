@@ -1,9 +1,8 @@
 """
 ===========================
-Parameters estimation
+Parameters estimation from Markovian
 ===========================
 
-An example plot of :class:`GLE_analysisEM.utils`
 Plot obtained values of the parameters versus the actual ones when the parameters are estimated from a Markov model
 """
 import numpy as np
@@ -43,11 +42,11 @@ X, idx, Xh = generator.sample(n_samples=20000, n_trajs=25, x0=0.0, v0=0.0)
 print("---- Real ones ----")
 print(generator.get_coefficients())
 
-for n in range(dim_x):
-    plt.plot(X[:, 0], X[:, n * 2 + 2], label="v{}".format(n + 1))
-    plt.plot(X[:, 0], X[:, n * 2 + 1], label="x{}".format(n + 1))
-
-plt.show()
+# for n in range(dim_x):
+#     plt.plot(X[:, 0], X[:, n * 2 + 2], label="v{}".format(n + 1))
+#     plt.plot(X[:, 0], X[:, n * 2 + 1], label="x{}".format(n + 1))
+#
+# plt.show()
 # ------ Estimation ------#
 # basis = GLE_BasisTransform(basis_type="linear")
 basis = GLE_BasisTransform(basis_type="polynomial", degree=3).fit(X[1 : 1 + dim_x])
