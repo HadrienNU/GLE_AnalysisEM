@@ -1,6 +1,8 @@
 .. -*- mode: rst -*-
 
-|Travis|_ |Codecov|_ |ReadTheDocs|_ |Black|
+.. |Travis|_ |Codecov|_ 
+
+|ReadTheDocs|_ |Black|
 
 .. |Travis| image:: https://travis-ci.org/scikit-learn-contrib/project-template.svg?branch=master
 .. _Travis: https://travis-ci.org/scikit-learn-contrib/project-template
