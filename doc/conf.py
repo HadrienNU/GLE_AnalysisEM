@@ -33,10 +33,10 @@ copyright = u"2020, MAESTRO"
 # built documents.
 #
 # The short X.Y version.
-from GLE_analysisEM import __version__
+# from GLE_analysisEM import __version__
 
 #
-version = __version__
+version = 1.0
 # # The full version, including alpha/beta/rc tags.
 # release = __version__
 

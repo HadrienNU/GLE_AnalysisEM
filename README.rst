@@ -30,7 +30,7 @@ To install the module
 
 .. code-block:: sh
 
-	pip3 install --user git+ssh://git@github.com/HadrienNU/GLE_AnalysisEM.git
+	pip3 install --user git+https://github.com/HadrienNU/GLE_AnalysisEM.git
 
 To compile the documentation
 
@@ -44,10 +44,3 @@ And the documentation will be available in
 .. code-block:: sh
 
   doc/_build/html/index.html
-
-To compile the fortran code
-
-.. code-block:: sh
-
-  cd GLE_analysisEM/
-  f2py3 -c -m _filter_smoother FilterSmoother.f90 -llapack
