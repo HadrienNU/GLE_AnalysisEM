@@ -1,6 +1,9 @@
 name: GLE_analysisEM
+channels:
+  - defaults
 dependencies:
   - numpy
   - scipy
   - scikit-learn
   - pandas
+  - libgfortran-ng
