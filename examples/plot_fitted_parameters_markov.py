@@ -1,7 +1,7 @@
 """
-===========================
+=====================================
 Parameters estimation from Markovian
-===========================
+=====================================
 
 Plot obtained values of the parameters versus the actual ones when the parameters are estimated from a Markov model
 """
