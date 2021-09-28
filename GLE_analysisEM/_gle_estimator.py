@@ -19,7 +19,7 @@ from ._gle_basis_projection import GLE_BasisTransform
 
 # In case the fortran module is not available, there is the python fallback
 try:
-    from ._filter_smoother import filtersmoother
+    from ._kalman_python import filtersmoother
 except ImportError as err:
     print(err)
     warnings.warn("Python fallback will been used for filtersmoother module. Consider compiling the fortran module")
