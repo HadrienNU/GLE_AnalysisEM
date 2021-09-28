@@ -296,6 +296,8 @@ sphinx_gallery_conf = {
     "examples_dirs": "../examples",
     # path where to save gallery generated examples
     "gallery_dirs": "auto_examples",
+    # Only compute subset of examples
+    "filename_pattern": "/plot_e",
 }
 
 
