@@ -37,7 +37,7 @@ copyright = u"2020, MAESTRO"
 # from GLE_analysisEM import __version__
 
 #
-version = 1.0
+version = "1.0"
 # # The full version, including alpha/beta/rc tags.
 # release = __version__
 
