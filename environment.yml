@@ -7,3 +7,4 @@ dependencies:
   - scikit-learn
   - pandas
   - libgfortran-ng
+  - sphinx-gallery
