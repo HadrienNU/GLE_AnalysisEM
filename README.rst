@@ -1,6 +1,6 @@
 .. -*- mode: rst -*-
 
-.. |Travis|_ |Codecov|_ 
+.. |Travis|_ |Codecov|_
 
 |ReadTheDocs|_ |Black|
 
@@ -10,8 +10,8 @@
 .. |Codecov| image:: https://codecov.io/gh/scikit-learn-contrib/project-template/branch/master/graph/badge.svg
 .. _Codecov: https://codecov.io/gh/scikit-learn-contrib/project-template
 
-.. |ReadTheDocs| image:: https://readthedocs.org/projects/sklearn-template/badge/?version=latest
-.. _ReadTheDocs: https://sklearn-template.readthedocs.io/en/latest/?badge=latest
+.. |ReadTheDocs| image:: https://readthedocs.org/projects/gle-analysisem/badge/?version=latest
+.. _ReadTheDocs: https://gle-analysisem.readthedocs.io/en/latest/?badge=latest
 
 .. |Black| image:: https://img.shields.io/badge/code%20style-black-000000.svg
     :target: https://github.com/psf/black
