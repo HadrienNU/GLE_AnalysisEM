@@ -1,5 +1,6 @@
 name: GLE_analysisEM
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - numpy
@@ -7,5 +8,4 @@ dependencies:
   - scikit-learn
   - pandas
   - libgfortran-ng
-  - pip3
   - sphinx-gallery
