@@ -13,6 +13,9 @@
 .. |ReadTheDocs| image:: https://readthedocs.org/projects/gle-analysisem/badge/?version=latest
 .. _ReadTheDocs: https://gle-analysisem.readthedocs.io/en/latest/?badge=latest
 
+.. image:: https://zenodo.org/badge/317840103.svg
+   :target: https://zenodo.org/badge/latestdoi/317840103
+
 .. |Black| image:: https://img.shields.io/badge/code%20style-black-000000.svg
     :target: https://github.com/psf/black
 
