@@ -6,7 +6,7 @@
 Welcome to GLE_AnalysisEM's documentation!
 ============================================
 
-This project is implementation of Expectation-Maximization algorithm for the inference of Generalized Langevin Equations. Please refer to XXX for a detailed description of the algorithm.
+This project is implementation of Expectation-Maximization algorithm for the inference of Generalized Langevin Equations. Please refer to https://arxiv.org/abs/2110.04246 for a detailed description of the algorithm.
 
 
 .. toctree::
@@ -23,7 +23,7 @@ This project is implementation of Expectation-Maximization algorithm for the inf
    :caption: Tutorial - Examples
 
    auto_examples/index
-   
+
 .. note::
 
     Installing the library is as simple as running
@@ -42,4 +42,3 @@ This project is implementation of Expectation-Maximization algorithm for the inf
 
 `Examples <auto_examples/index.html>`_
 --------------------------------------
-
