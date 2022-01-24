@@ -49,7 +49,7 @@ def cutTrajs(X, idx_trajs=[], n_cut=1):
     for trj in traj_list:
         sub_trajs = np.array_split(trj, n_cut)
         for txv in sub_trajs:
-            if X is None:
+            if X_cut is None:
                 X_cut = txv
             else:
                 idx_cut.append(len(X))
