@@ -91,6 +91,7 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
                 xf = xfa[np.nonzero(fehist[0])]
             else:
                 fehist = np.histogramdd(X)
+                xfa = [(edge[1:] + edge[:-1]) / 2.0 for edge in fehist[1]]
             self.edges_hist_ = fehist[1]
             self.hist_ = fehist[0]
             self.fe_ = np.where(self.hist_ > 0, -np.log(self.hist_), np.zeros_like(self.hist_))
@@ -109,12 +110,17 @@ class GLE_PotentialTransform(TransformerMixin, BaseEstimator):
                 # print(nb_points)
                 xf = np.linspace(self.min_vals - 2 * bandwidth, self.max_vals + 2 * bandwidth, nb_points)  # We extend a bit the range to allow slow decay of the density
                 self.fe_ = -1 * self.kde_.score_samples(xf)
+            elif self.dim_x == 2:
+                nb_points = [int(np.floor(np.max(self.max_vals[d] - self.min_vals[d]) / (0.25 * bandwidth))) for d in range(self.dim_x)]
+                xfa = [np.linspace(self.min_vals[d] - 2 * bandwidth, self.max_vals[d] + 2 * bandwidth, nb_points[d]) for d in range(self.dim_x)]
+                xx, yy = np.meshgrid(xfa[0], xfa[1])
+                xy_grid = np.array((xx.ravel(), yy.ravel())).T
+                self.fe_ = -1 * self.kde_.score_samples(xy_grid).reshape(nb_points)
 
         # Spline interpolation for fast evaluation
         if self.dim_x == 1:
             self.fe_spline_ = interpolate.splrep(xf, self.fe_, per=self.per)  # A bit of smoothing
         elif self.dim_x == 2:
-            xfa = [(edge[1:] + edge[:-1]) / 2.0 for edge in self.edges_hist_]
             # x, y = np.meshgrid(xfa[0], xfa[1])
             # fe_flat = pf.flatten()
             # x_coords = x.flatten()[np.nonzero(fe_flat)]
