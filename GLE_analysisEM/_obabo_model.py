@@ -31,10 +31,12 @@ class OBABO_Model(AbstractModel):
 
     def preprocessingTraj(self, basis, X, idx_trajs=[]):
         dt = X[1, 0] - X[0, 0]
-        v = (np.roll(X[:, 1 : 1 + self.dim_x], -1, axis=0) - X[:, 1 : 1 + self.dim_x]) / dt
+        #v = (np.roll(X[:, 1 : 1 + self.dim_x], -1, axis=0) - X[:, 1 : 1 + self.dim_x]) / dt
         bk = basis.fit_transform(X[:, 1 : 1 + self.dim_x])
-        v_plus = np.roll(v, -1, axis=0)
-        Xtraj = np.hstack((v_plus, v, v, bk))
+        #v_plus = np.roll(v, -1, axis=0)
+        x = X[:, 1 : 1 + self.dim_x]
+        x_plus = np.roll(x, -1, axis=0)
+        Xtraj = np.hstack((x_plus, x, bk))
 
         # Remove the last element of each trajectory
         traj_list = np.split(Xtraj, idx_trajs)
@@ -49,7 +51,7 @@ class OBABO_Model(AbstractModel):
 
         return Xtraj_new, idx_new
 
-    def compute_expectation_estep(self, traj, A, force_coeffs, dim_h, dt):
+    def compute_expectation_estep(self, traj, A_coeffs, force_coeffs, dim_h, dt):
         """
         Compute the value of mutilde and Xtplus
         Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -57,6 +59,9 @@ class OBABO_Model(AbstractModel):
         Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
         Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
         mutilde = (np.matmul(-A[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T))).T
+        
+        ## NEW mutilde = (1 +
+
         mutilde += np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T).T  # mutilde is X_t+f(X_t) - A*X_t
         return traj[:, : self.dim_x], mutilde, np.identity(self.dim_x + dim_h)[:, self.dim_x :] - A[:, self.dim_x :]
 
