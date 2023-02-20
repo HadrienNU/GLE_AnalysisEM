@@ -32,11 +32,12 @@ class OBABO_Model(AbstractModel):
     def preprocessingTraj(self, basis, X, idx_trajs=[]):
         dt = X[1, 0] - X[0, 0]
         #v = (np.roll(X[:, 1 : 1 + self.dim_x], -1, axis=0) - X[:, 1 : 1 + self.dim_x]) / dt
-        bk = basis.fit_transform(X[:, 1 : 1 + self.dim_x])
         #v_plus = np.roll(v, -1, axis=0)
         x = X[:, 1 : 1 + self.dim_x]
         x_plus = np.roll(x, -1, axis=0)
-        Xtraj = np.hstack((x_plus, x, bk))
+        bk = basis.fit_transform(x)
+        bk_plus = basis.fit_transform(x_plus)
+        Xtraj = np.hstack((x, x_plus, bk, bk_plus))
 
         # Remove the last element of each trajectory
         traj_list = np.split(Xtraj, idx_trajs)
@@ -51,19 +52,35 @@ class OBABO_Model(AbstractModel):
 
         return Xtraj_new, idx_new
 
-    def compute_expectation_estep(self, traj, A_coeffs, force_coeffs, dim_h, dt):
+    def compute_expectation_estep(self, traj, A_coeffs, force_coeffs, dim_h, dt, diffusion_coeffs):
         """
         Compute the value of mutilde and Xtplus
-        Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
+        Datas are stacked as (x, x plus proj , bk , bk plus proj)
+        return Xtplus, mutilde, R, SIG_TETHA
         """
         Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
         Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
-        mutilde = (np.matmul(-A[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T))).T
+        # mutilde = (np.matmul(-A[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T))).T
         
-        ## NEW mutilde = (1 +
+        # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) 
+        #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
+        Basis_l = len(force_coeffs)
+        x_np1 =  traj[:, : 1 self.dim_x] + dt**2 / 2 * np.matmul(force_coeffs,  traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) .T
+        v_np1 =  dt/2 * np.matmul(A_coeffs[:, : self.dim_x]), 
+                                np.matmul(force_coeffs, traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) +  np.matmul(force_coeffs,  traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x ].T) ).T
+        
+        mutilde = np.asarray([ x_np1 , v_np1 ])
+        
+        A2 = np.matmul(A_coeffs[:, : self.dim_x],A_coeffs[:, : self.dim_x])
+        
+        R = np.asarray([ dt * A_coeffs , A2])
+        Xtplus = traj[:, self.dim_x : 2 * self.dim_x ]
+        Id = np.identity(self.dim_x)
+        SIG_TETHA = np.asarray([[ 0 * Id  , dt * diffusion_coeffs * Id ],
+                                [ diffusion_coeffs * Id , np.matmul(A_coeffs) * [:, : self.dim_x], Id]])
+        
+        return Xtplus, mutilde, R, SIG_TETHA
 
-        mutilde += np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T).T  # mutilde is X_t+f(X_t) - A*X_t
-        return traj[:, : self.dim_x], mutilde, np.identity(self.dim_x + dim_h)[:, self.dim_x :] - A[:, self.dim_x :]
 
     def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
         """M step.
