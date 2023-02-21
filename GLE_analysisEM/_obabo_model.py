@@ -77,7 +77,7 @@ class OBABO_Model(AbstractModel):
         Xtplus = traj[:, self.dim_x : 2 * self.dim_x ]
         Id = np.identity(self.dim_x)
         SIG_TETHA = np.asarray([[ 0 * Id  , dt * diffusion_coeffs * Id ],
-                                [ diffusion_coeffs * Id , np.matmul(A_coeffs) * [:, : self.dim_x], Id]])
+                                [ diffusion_coeffs * Id , np.matmul(A_coeffs[:, : self.dim_x], Id)]])
         
         return Xtplus, mutilde, R, SIG_TETHA
 
