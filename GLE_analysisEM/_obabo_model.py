@@ -62,7 +62,7 @@ class OBABO_Model(AbstractModel):
         Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
         # mutilde = (np.matmul(-A[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T))).T
         
-        # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) 
+        # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) :$
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
         Basis_l = self.basis.nb_basis_elt_
         x_np1 =  traj[:, : 1 * self.dim_x] + dt**2 / 2 * np.matmul(force_coeffs,  traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) .T
@@ -143,42 +143,3 @@ class OBABO_Model(AbstractModel):
         p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t + gauss[: self.dim_x]
         return x_tp, p_tp, h_tp
 
-
-class EulerForceVisibleModel(EulerModel):
-    def m_step(self, A_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
-        """M step.
-        TODO:   -Select dimension of fitted parameters from the sufficient stats
-        """
-        Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
-
-        if OptimizeForce:
-            invxx = np.linalg.inv(sufficient_stat["xx"][: self.dim_x, : self.dim_x])
-            Ybk = sufficient_stat["bkdx"][:, : self.dim_x].T - np.matmul(sufficient_stat["xdx"][: self.dim_x, : self.dim_x].T, np.matmul(invxx, sufficient_stat["bkx"][:, : self.dim_x].T))
-
-            bkbk = sufficient_stat["bkbk"] - np.matmul(sufficient_stat["bkx"][:, : self.dim_x], np.matmul(invxx, sufficient_stat["bkx"][:, : self.dim_x].T))
-            # print(Ybk, sufficient_stat["bkdx"][:, : self.dim_x].T, -np.matmul(sufficient_stat["xdx"][: self.dim_x, : self.dim_x].T, np.matmul(invxx, sufficient_stat["bkx"][:, : self.dim_x].T)))
-            # print(np.matmul(Ybk, np.linalg.inv(dt * bkbk)))
-            force_coeffs = (np.matmul(Ybk, np.linalg.inv(dt * bkbk)))[: self.dim_x, :]
-        else:
-            force_coeffs = coeffs_force_old
-
-        YX = sufficient_stat["xdx"].T - np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
-        XX = sufficient_stat["xx"]
-        A = -np.matmul(YX, np.linalg.inv(XX))
-
-        if OptimizeDiffusion:  # Optimize Diffusion based on the variance of the sufficients statistics
-            Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
-            Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
-
-            bkbk = np.matmul(Pf, np.matmul(np.matmul(force_coeffs, np.matmul(sufficient_stat["bkbk"], force_coeffs.T)), Pf.T))
-            bkdx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkdx"]))
-            bkx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
-
-            residuals = sufficient_stat["dxdx"] + np.matmul(A, sufficient_stat["xdx"]) + np.matmul(A, sufficient_stat["xdx"]).T - bkdx.T - bkdx
-            residuals += np.matmul(A, np.matmul(sufficient_stat["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
-            SST = 0.5 * (residuals + residuals.T)
-        else:
-            SST = 1
-
-        return A, force_coeffs, SST
