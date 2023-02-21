@@ -20,7 +20,7 @@ from ._gle_basis_projection import GLE_BasisTransform
 
 # In case the fortran module is not available, there is the python fallback
 try:
-    from ._kalman_python import filtersmoother
+    from ._filter_smoother import filtersmoother
 except ImportError as err:
     print(err)
     warnings.warn("Python fallback will been used for filtersmoother module. Consider compiling the fortran module")
@@ -39,7 +39,8 @@ def sufficient_stats(traj, dim_x):
 
     #xval = traj[:-1, 2 * dim_x : 3 * dim_x]
     #dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
-    dim_bk = len(traj[0, 2 * dim_x :])/2
+    dim_bk = int(len(traj[0, 2 * dim_x :])/2)
+    print(dim_bk , type(dim_bk))
     bk = traj[:-1, 2 * dim_x : 2 * dim_x + 2 * dim_x]
     #xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
     #xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
@@ -48,7 +49,7 @@ def sufficient_stats(traj, dim_x):
     #bkdx = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
     bkbk = np.mean(bk[:, :, np.newaxis] * bk[:, np.newaxis, :], axis=0)
 
-    return pd.Series({"dxdx": np.zero((dim_x, dim_x)), "xdx": np.zero((dim_x, dim_x)), "xx": np.zero((dim_x, dim_x)), "bkx": np.zero((dim_bk, dim_x)), "bkdx": np.zero((dim_bk, dim_x)), "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0})
+    return pd.Series({"dxdx": np.zeros((dim_x, dim_x)), "xdx": np.zeros((dim_x, dim_x)), "xx": np.zeros((dim_x, dim_x)), "bkx": np.zeros((dim_bk, dim_x)), "bkdx": np.zeros((dim_bk, dim_x)), "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0})
 
 
 def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="aboba"):
@@ -288,16 +289,16 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             #     raise ValueError("No initial values for initial conditions are provided and init_params is set to user defined")
 
         if self.A_init is not None:
-            if np.asarray(self.A_init).shape != (self.dim_x + self.dim_h, self.dim_x + self.dim_h):
+            if np.asarray(self.A_init).shape != (self.dim_h, self.dim_h):
                 raise ValueError("Wrong dimensions for A_init")
             if self.C_init is None:
-                self.C_init = np.identity(self.dim_x + self.dim_h)
+                self.C_init = np.identity(self.dim_h)
             expA, SST = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
 
         if self.C_init is not None:
-            if np.asarray(self.C_init).shape != (self.dim_x + self.dim_h, self.dim_x + self.dim_h):
+            if np.asarray(self.C_init).shape != (self.dim_h, self.dim_h):
                 raise ValueError("Wrong dimensions for C_init")
 
         if self.mu_init is not None:
@@ -363,10 +364,13 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         if self.sig_init is not None:
             self.sig0 = np.asarray(self.sig_init)
+            print("hello1")
         elif self.C_init is not None:
             self.sig0 = self.C_init[self.dim_x :, self.dim_x :]
+            print("hello2")
         else:
             self.sig0 = np.identity(self.dim_h)
+            print("hello3")
         self.initialized_ = True
 
     def fit(self, X, y=None, idx_trajs=[]):
@@ -499,7 +503,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Covariances of the pair of the hidden variables
         """
         Xtplus, mutilde, R , SIG_TETHA = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt, self.diffusion_coeffs)
-    
+        print (f""" 
+        Xtplus : {Xtplus, Xtplus.shape } \n 
+        mutilde : {mutilde, mutilde.shape } \n 
+        R :  {R, R.shape} \n 
+        SIG_TETHA : {SIG_TETHA , SIG_TETHA.shape} 
+        self.mu0 : {self.mu0 , self.mu0.shape}
+        self.sig0 : {self.sig0 , self.sig0.shape}
+        """)
         return filtersmoother(Xtplus, mutilde, R, SIG_TETHA, self.mu0, self.sig0)
 
     def _e_step_stats(self, traj_list, datas_visible):

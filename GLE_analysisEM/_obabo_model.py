@@ -12,19 +12,19 @@ class OBABO_Model(AbstractModel):
         """
         Convert the user provided coefficients into the local one
         """
-        friction = - np.ln(A) * 2 / dt
+        friction = scipy.linalg.expm( - A * dt / 2 )
         diffusion = np.matmul(friction, C) + np.matmul(C, friction.T)
         return friction, diffusion
 
     def _convert_local_coefficients(self, friction_coeffs, diffusion_coeffs, dt):
         """
-        Convert the estimator coefficients into the user one
+        Convert the estimator coefficients into the user one 
         """
         if not np.isfinite(np.sum(friction_coeffs)) or not np.isfinite(np.sum(diffusion_coeffs)):  # Check for NaN value
             warnings.warn("NaN of infinite value in friction or diffusion coefficients.")
             return friction_coeffs, diffusion_coeffs
 
-        A = np.exp( -friction_coeffs * dt / 2 )
+        A = - scipy.linalg.logm(friction_coeffs) * 2 / dt
         C = scipy.linalg.solve_continuous_lyapunov(friction_coeffs, diffusion_coeffs)
 
         return A, C
@@ -38,7 +38,7 @@ class OBABO_Model(AbstractModel):
         bk = basis.fit_transform(x)
         bk_plus = basis.fit_transform(x_plus)
         Xtraj = np.hstack((x, x_plus, bk, bk_plus))
-
+        self.dim_basis = basis.nb_basis_elt_
         # Remove the last element of each trajectory
         traj_list = np.split(Xtraj, idx_trajs)
         Xtraj_new = None
@@ -64,20 +64,19 @@ class OBABO_Model(AbstractModel):
         
         # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) :$
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
-        Basis_l = self.basis.nb_basis_elt_
+        Basis_l = self.dim_basis
         x_np1 =  traj[:, : 1 * self.dim_x] + dt**2 / 2 * np.matmul(force_coeffs,  traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) .T
         v_np1 =  dt/2 * np.matmul(A_coeffs[:, : self.dim_x], 
                                 np.matmul(force_coeffs, traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) +  np.matmul(force_coeffs,  traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x ].T) ).T
         
-        mutilde = np.asarray([ x_np1 , v_np1 ])
+        mutilde = np.hstack(( x_np1 , v_np1 ))
         
-        A2 = np.matmul(A_coeffs[:, : self.dim_x],A_coeffs[:, : self.dim_x])
-        
-        R = np.asarray([ dt * A_coeffs , A2])
+        A2 = np.matmul(A_coeffs[:, : self.dim_x],A_coeffs[:, : self.dim_x])        
+        R = np.asarray([ dt * A_coeffs , A2]).reshape((self.dim_x + dim_h, dim_h))
         Xtplus = traj[:, self.dim_x : 2 * self.dim_x ]
         Id = np.identity(self.dim_x)
         SIG_TETHA = np.asarray([[ 0 * Id  , dt * diffusion_coeffs * Id ],
-                                [ diffusion_coeffs * Id , np.matmul(A_coeffs[:, : self.dim_x], Id)]])
+                                [ diffusion_coeffs * Id , np.matmul(A_coeffs[:, : self.dim_x], Id)]]).reshape((self.dim_x + dim_h, self.dim_x + dim_h))
         
         return Xtplus, mutilde, R, SIG_TETHA
 
