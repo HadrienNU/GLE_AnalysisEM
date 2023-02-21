@@ -14,6 +14,7 @@ from sklearn.exceptions import ConvergenceWarning
 
 from .random_matrix import generateRandomDefPosMat
 from ._euler_model import EulerForceVisibleModel
+from ._obabo_model import OBABO_Model
 
 from ._gle_basis_projection import GLE_BasisTransform
 
@@ -27,7 +28,7 @@ except ImportError as err:
 
 import multiprocessing
 
-model_class = {"euler": EulerForceVisibleModel}
+model_class = {"euler": EulerForceVisibleModel , "obabo": OBABO_Model }
 
 
 def sufficient_stats(traj, dim_x):
@@ -36,17 +37,18 @@ def sufficient_stats(traj, dim_x):
     Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
     """
 
-    xval = traj[:-1, 2 * dim_x : 3 * dim_x]
-    dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
-    bk = traj[:-1, 3 * dim_x :]
-    xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
-    xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-    dxdx = np.mean(dx[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-    bkx = np.mean(bk[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
-    bkdx = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+    #xval = traj[:-1, 2 * dim_x : 3 * dim_x]
+    #dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+    dim_bk = len(traj[0, 2 * dim_x :])/2
+    bk = traj[:-1, 2 * dim_x : 2 * dim_x + 2 * dim_x]
+    #xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+    #xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+    #dxdx = np.mean(dx[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+    #bkx = np.mean(bk[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+    #bkdx = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
     bkbk = np.mean(bk[:, :, np.newaxis] * bk[:, np.newaxis, :], axis=0)
 
-    return pd.Series({"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0})
+    return pd.Series({"dxdx": np.zero((dim_x, dim_x)), "xdx": np.zero((dim_x, dim_x)), "xx": np.zero((dim_x, dim_x)), "bkx": np.zero((dim_bk, dim_x)), "bkdx": np.zero((dim_bk, dim_x)), "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0})
 
 
 def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="aboba"):
@@ -66,21 +68,21 @@ def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force,
     bkdx = np.zeros_like(bkx)
     bkdx[:, :dim_x] = old_stats["bkdx"]
 
-    xval = traj[:-1, 2 * dim_x : 3 * dim_x]
-    dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
-    bk = traj[:-1, 3 * dim_x :]
+    #xval = traj[:-1, 2 * dim_x : 3 * dim_x]
+    #dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+    bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_force]
 
-    dh = muh[:-1, :dim_h] - muh[:-1, dim_h:]
+    #dh = muh[:-1, :dim_h] - muh[:-1, dim_h:]
 
-    Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
-    Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
-    Sigh_tpt = np.mean(Sigh[:-1, :dim_h, dim_h:], axis=0)
-    Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
+    #Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
+    #Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
+    #Sigh_tpt = np.mean(Sigh[:-1, :dim_h, dim_h:], axis=0)
+    #Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
 
-    muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
-    muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
-    muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
-    muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+    #muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+    #muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+    #muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+    #muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
 
     xx[dim_x:, dim_x:] = Sigh_tt + muh_tt
     xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
