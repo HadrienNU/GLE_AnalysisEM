@@ -12,7 +12,7 @@ class OBABO_Model(AbstractModel):
         """
         Convert the user provided coefficients into the local one
         """
-        friction = A * dt
+        friction = - np.ln(A) * 2 / dt
         diffusion = np.matmul(friction, C) + np.matmul(C, friction.T)
         return friction, diffusion
 
@@ -24,7 +24,7 @@ class OBABO_Model(AbstractModel):
             warnings.warn("NaN of infinite value in friction or diffusion coefficients.")
             return friction_coeffs, diffusion_coeffs
 
-        A = friction_coeffs / dt
+        A = np.exp( -friction_coeffs * dt / 2 )
         C = scipy.linalg.solve_continuous_lyapunov(friction_coeffs, diffusion_coeffs)
 
         return A, C
@@ -65,7 +65,7 @@ class OBABO_Model(AbstractModel):
         # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) 
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
         Basis_l = self.basis.nb_basis_elt_
-        x_np1 =  traj[:, : 1 self.dim_x] + dt**2 / 2 * np.matmul(force_coeffs,  traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) .T
+        x_np1 =  traj[:, : 1 * self.dim_x] + dt**2 / 2 * np.matmul(force_coeffs,  traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) .T
         v_np1 =  dt/2 * np.matmul(A_coeffs[:, : self.dim_x]), 
                                 np.matmul(force_coeffs, traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) +  np.matmul(force_coeffs,  traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x ].T) ).T
         
