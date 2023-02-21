@@ -64,7 +64,7 @@ class OBABO_Model(AbstractModel):
         
         # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) 
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
-        Basis_l = len(force_coeffs)
+        Basis_l = self.basis.nb_basis_elt_
         x_np1 =  traj[:, : 1 self.dim_x] + dt**2 / 2 * np.matmul(force_coeffs,  traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) .T
         v_np1 =  dt/2 * np.matmul(A_coeffs[:, : self.dim_x]), 
                                 np.matmul(force_coeffs, traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) +  np.matmul(force_coeffs,  traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x ].T) ).T
