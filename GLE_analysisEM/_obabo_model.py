@@ -74,16 +74,9 @@ class OBABO_Model(AbstractModel):
         A_fric = A_coeffs[:, : self.dim_x]
         x_np1 = traj[:, : self.dim_x] + (dt**2 / 2 * force)
         print(A_fric)
-<<<<<<< HEAD
         v_np1 = dt / 2 * np.matmul((force + force_plus), A_fric.T)
         mutilde = np.hstack((x_np1, v_np1))
 
-=======
-        print(force_coeffs)
-        v_np1 =  dt / 2 * np.matmul((force + force_plus),  A_fric.T)
-        mutilde = np.hstack(( x_np1 , v_np1 ))
-        
->>>>>>> eb3d11d4f1611abea6682399e823b80ed6c67ff1
         A2 = np.matmul(A_coeffs, A_coeffs)
         R = np.vstack((dt * A_coeffs, A2))  # .reshape((self.dim_x + dim_h, dim_h))
         Id = np.identity(self.dim_x)
@@ -101,13 +94,9 @@ class OBABO_Model(AbstractModel):
             # invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
             C = np.matmul(ABT, invBBT)
 
-<<<<<<< HEAD
             A = scipy.linalg.expm(scipy.linalg.logm(C[:dim_h, :dim_h] + np.identity(dim_h)) / 2)
 
-            force_coeffs = C[:dim_x, dim_h:] / dt / A[0, 0]
-=======
-            force_coeffs = C[:dim_h,dim_h:]  / dt / A[0,0] 
->>>>>>> eb3d11d4f1611abea6682399e823b80ed6c67ff1
+            force_coeffs = C[: self.dim_x, dim_h:] / dt / A[0, 0]
         else:
             force_coeffs = coeffs_force_old
             Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
