@@ -2,10 +2,10 @@
 This the main estimator module
 """
 import numpy as np
-import pandas as pd
 
 import warnings
 from time import time
+
 
 from sklearn.base import BaseEstimator, DensityMixin
 from sklearn.utils.validation import check_is_fitted
@@ -28,101 +28,19 @@ except ImportError as err:
 
 import multiprocessing
 
-model_class = {"euler": EulerForceVisibleModel , "obabo": OBABO_Model }
+model_class = {"euler": EulerForceVisibleModel, "obabo": OBABO_Model}
 
 
-def sufficient_stats(traj, dim_x):
-    """
-    Given a sample of trajectory, compute the averaged values of the sufficient statistics
-    Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
-    """
-
-    #xval = traj[:-1, 2 * dim_x : 3 * dim_x]
-    #dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
-    dim_bk = int(len(traj[0, 2 * dim_x :])/2)
-    print(dim_bk , type(dim_bk))
-    bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_bk]
-    #xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
-    #xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-    #dxdx = np.mean(dx[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-    #bkx = np.mean(bk[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
-    #bkdx = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-    bkbk = np.mean(bk[:, :, np.newaxis] * bk[:, np.newaxis, :], axis=0)
-
-    return pd.Series({"dxdx": np.zeros((dim_x, dim_x)), "xdx": np.zeros((dim_x, dim_x)), "xx": np.zeros((dim_x, dim_x)), "bkx": np.zeros((dim_bk, dim_x)), "bkdx": np.zeros((dim_bk, dim_x)), "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0})
+# Two helper function for arithmetic with dictionnary
+def adder(accumulator, element, factor):
+    for key, value in element.items():
+        accumulator[key] = accumulator.get(key, 0.0) + value / factor
+    return accumulator
 
 
-def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="obabo"):
-    """
-    Compute the sufficient statistics averaged over the hidden variable distribution
-    Datas are stacked as (x, x_plus, bk, bk_plus)
-    """
-    # print("Suff_stats")
-    xx = np.zeros((dim_h, dim_h))
-    #xx = np.zeros((dim_x + dim_h, dim_x + dim_h))
-    #xx[:dim_x, :dim_x] = old_stats["xx"]
-    xdx = np.zeros((dim_h, dim_h))
-    #xdx[:dim_x, :dim_x] = old_stats["xdx"]
-    #dxdx = np.zeros_like(xx)
-    dxdx = np.zeros((dim_h, dim_h))
-    #dxdx[:dim_x, :dim_x] = old_stats["dxdx"]
-    bkx = np.zeros((dim_force, dim_h))
-    #bkx[:, :dim_x] = old_stats["bkx"]
-    bkdx = np.zeros_like(bkx)
-    #bkdx[:, :dim_x] = old_stats["bkdx"]
-    #xval = traj[:-1, 2 * dim_x : 3 * dim_x]
-    #dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
-    bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_force * dim_x]
-    bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x: ]
-
-    x = muh[:-1, dim_h:]
-    dx = muh[:-1, :dim_h] - muh[:-1, dim_h:]
-
-    Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
-    Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
-    Sigh_tpt = np.mean(Sigh[:-1, :dim_h, dim_h:], axis=0)
-    Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
-
-    muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
-    muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
-    muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
-    muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
-
-    xx[:, :] = Sigh_tt + muh_tt
-    #xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
-
-    xdx[:, :] = Sigh_ttp + muh_ttp - Sigh_tt - muh_tt
-    #xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-    #xdx[:dim_x, dim_x:] = np.mean(xval[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
-
-    dxdx[:, :] = Sigh_tptp + muh_tptp - Sigh_ttp - Sigh_tpt - muh_ttp - muh_tpt + Sigh_tt + muh_tt
-    #dxdx[dim_x:, :dim_x] = np.mean(dh[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-
-    bkx[:, :] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
-    bkdx[:, :] = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-
-    #xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
-    #dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
-
-    B = np.hstack((x, (bk + bk_plus) /2))
-    print(f"B = {B, B.shape}")
-    BBT = np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
-    print(f"BBT = {BBT, BBT.shape}")
-    
-    ABT = np.mean(dx[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
-    print(f"ABT = {ABT, ABT.shape}")
-
-    detd = np.linalg.det(Sigh[:-1, :, :])
-    dets = np.linalg.det(Sigh[:-1, dim_h:, dim_h:])
-    hSdouble = 0.5 * np.log(detd[detd > 0.0]).mean()
-    hSsimple = 0.5 * np.log(dets[dets > 0.0]).mean()
-    # TODO take care of initial value that is missing
-    return pd.Series({"BBT": BBT, "ABT": ABT, "dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple})
-
-
-def e_step_worker_pool(est, traj, datas_visible, N):
+def e_step_worker_pool(est, traj, datas_visible):
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
-    return sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / N
+    return est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force)
 
 
 class GLE_Estimator(DensityMixin, BaseEstimator):
@@ -375,13 +293,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
         if self.sig_init is not None:
             self.sig0 = np.asarray(self.sig_init)
-            print("hello1")
         elif self.C_init is not None:
             self.sig0 = self.C_init[self.dim_x :, self.dim_x :]
-            print("hello2")
         else:
             self.sig0 = np.identity(self.dim_h)
-            print("hello3")
         self.initialized_ = True
 
     def fit(self, X, y=None, idx_trajs=[]):
@@ -424,9 +339,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.logL[:] = np.nan
 
         # Initial evalution of the sufficient statistics for observables
-        datas_visible = 0.0
+        datas_visible = {}
         for traj in traj_list:
-            datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
+            adder(datas_visible, self.model_class.sufficient_stats(traj, self.dim_x), len(traj_list))
 
         self.coeffs_list_all = []
 
@@ -513,29 +428,31 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigh : array-like, shape (n_timstep, 2*dim_h,2*dim_h)
             Covariances of the pair of the hidden variables
         """
-        Xtplus, mutilde, R , SIG_TETHA = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt, self.diffusion_coeffs)
-        print (f""" 
-        Xtplus : {Xtplus, Xtplus.shape } \n 
-        mutilde : {mutilde, mutilde.shape } \n 
-        R :  {R, R.shape} \n 
-        SIG_TETHA : {SIG_TETHA , SIG_TETHA.shape} 
+        Xtplus, mutilde, R, SIG_TETHA = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt, self.diffusion_coeffs)
+        print(
+            f"""
+        Xtplus : {Xtplus, Xtplus.shape } \n
+        mutilde : {mutilde, mutilde.shape } \n
+        R :  {R, R.shape} \n
+        SIG_TETHA : {SIG_TETHA , SIG_TETHA.shape}
         self.mu0 : {self.mu0 , self.mu0.shape}
         self.sig0 : {self.sig0 , self.sig0.shape}
-        """)
+        """
+        )
         return filtersmoother(Xtplus, mutilde, R, SIG_TETHA, self.mu0, self.sig0)
 
     def _e_step_stats(self, traj_list, datas_visible):
-        new_stat = 0.0
+        new_stat = {}
         if self.multiprocessing > 1:  # If we ask for more than one process
             with multiprocessing.Pool(processes=self.multiprocessing) as pool:
-                proc = [pool.apply_async(e_step_worker_pool, args=(self, traj, datas_visible, len(traj_list))) for traj in traj_list]
+                proc = [pool.apply_async(e_step_worker_pool, args=(self, traj, datas_visible)) for traj in traj_list]
                 for p in proc:
                     ret = p.get()  # will block
-                    new_stat += ret
+                    adder(new_stat, ret, len(traj_list))
         else:
             for traj in traj_list:
                 muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-                new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force), len(traj_list))
         return new_stat
 
     def _m_step(self, sufficient_stat):
@@ -618,21 +535,19 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
         traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
-        new_stat = 0.0
+        new_stat = {}
         if Xh is None:
-            datas_visible = 0.0
+            datas_visible = {}
             for traj in traj_list:
-                datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
+                adder(datas_visible, self.model_class.sufficient_stats(traj, self.dim_x), len(traj_list))
             new_stat = self._e_step_stats(traj_list, datas_visible)
-            # muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-            # new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
         else:
             traj_list_h = np.split(Xh, idx_trajs)
             for n, traj in enumerate(traj_list):
-                datas_visible = sufficient_stats(traj, self.dim_x)
+                datas_visible = self.model_class.sufficient_stats(traj, self.dim_x)
                 zero_sig = np.zeros((len(traj), 2 * self.dim_h, 2 * self.dim_h))
                 muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
-                new_stat += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force) / len(traj_list)
+                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force), len(traj_list))
         lower_bound = self.loglikelihood(new_stat)
         return lower_bound
 
@@ -783,7 +698,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
-        return 2 * (self.dim_x + self.dim_h) ** 2 + self.dim_h + self.dim_h ** 2
+        return 2 * (self.dim_x + self.dim_h) ** 2 + self.dim_h + self.dim_h**2
 
     def bic(self, X):
         """Bayesian information criterion for the current model on the input X.

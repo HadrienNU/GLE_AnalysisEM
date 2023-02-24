@@ -4,7 +4,7 @@ This the main estimator module
 import numpy as np
 from sklearn.utils import check_random_state, check_array
 
-from ._gle_estimator import GLE_Estimator, sufficient_stats
+from ._gle_estimator import GLE_Estimator, adder
 from ._gle_basis_projection import GLE_BasisTransform
 
 
@@ -112,9 +112,9 @@ class Markov_Estimator(GLE_Estimator):
         self.logL[:] = np.nan
 
         # Initial evalution of the sufficient statistics for observables
-        datas_visible = 0.0
+        datas_visible = {}
         for traj in traj_list:
-            datas_visible += sufficient_stats(traj, self.dim_x) / len(traj_list)
+            adder(datas_visible, self.model_class.sufficient_stats(traj, self.dim_x), len(traj_list))
 
         if do_init:
             self._initialize_parameters(random_state, traj_len=_min_traj_len)

@@ -49,7 +49,7 @@ class EulerModel(AbstractModel):
 
         return Xtraj_new, idx_new
 
-    def compute_expectation_estep(self, traj, A, force_coeffs, dim_h, dt):
+    def compute_expectation_estep(self, traj, A, force_coeffs, dim_h, dt, diffusion_coeffs):
         """
         Compute the value of mutilde and Xtplus
         Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -58,7 +58,7 @@ class EulerModel(AbstractModel):
         Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
         mutilde = (np.matmul(-A[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T))).T
         mutilde += np.matmul(np.identity(self.dim_x + dim_h)[:, : self.dim_x], traj[:, self.dim_x : 2 * self.dim_x].T).T  # mutilde is X_t+f(X_t) - A*X_t
-        return traj[:, : self.dim_x], mutilde, np.identity(self.dim_x + dim_h)[:, self.dim_x :] - A[:, self.dim_x :]
+        return traj[:, : self.dim_x], mutilde, np.identity(self.dim_x + dim_h)[:, self.dim_x :] - A[:, self.dim_x :], diffusion_coeffs
 
     def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
         """M step.
@@ -120,6 +120,82 @@ class EulerModel(AbstractModel):
         h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]
         p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t + gauss[: self.dim_x]
         return x_tp, p_tp, h_tp
+
+    @staticmethod
+    def sufficient_stats(traj, dim_x):
+        """
+        Given a sample of trajectory, compute the averaged values of the sufficient statistics
+        Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
+        """
+
+        xval = traj[:-1, 2 * dim_x : 3 * dim_x]
+        dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+        bk = traj[:-1, 3 * dim_x :]
+        xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+        xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        dxdx = np.mean(dx[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        bkx = np.mean(bk[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+        bkdx = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        bkbk = np.mean(bk[:, :, np.newaxis] * bk[:, np.newaxis, :], axis=0)
+
+        return {"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0}
+
+    @staticmethod
+    def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="aboba"):
+        """
+        Compute the sufficient statistics averaged over the hidden variable distribution
+        Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
+        """
+        # print("Suff_stats")
+        xx = np.zeros((dim_x + dim_h, dim_x + dim_h))
+        xx[:dim_x, :dim_x] = old_stats["xx"]
+        xdx = np.zeros_like(xx)
+        xdx[:dim_x, :dim_x] = old_stats["xdx"]
+        dxdx = np.zeros_like(xx)
+        dxdx[:dim_x, :dim_x] = old_stats["dxdx"]
+        bkx = np.zeros((dim_force, dim_x + dim_h))
+        bkx[:, :dim_x] = old_stats["bkx"]
+        bkdx = np.zeros_like(bkx)
+        bkdx[:, :dim_x] = old_stats["bkdx"]
+
+        xval = traj[:-1, 2 * dim_x : 3 * dim_x]
+        dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+        bk = traj[:-1, 3 * dim_x :]
+
+        dh = muh[:-1, :dim_h] - muh[:-1, dim_h:]
+
+        Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
+        Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
+        Sigh_tpt = np.mean(Sigh[:-1, :dim_h, dim_h:], axis=0)
+        Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
+
+        muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+        muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
+        muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+        muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+
+        xx[dim_x:, dim_x:] = Sigh_tt + muh_tt
+        xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+
+        xdx[dim_x:, dim_x:] = Sigh_ttp + muh_ttp - Sigh_tt - muh_tt
+        xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        xdx[:dim_x, dim_x:] = np.mean(xval[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
+
+        dxdx[dim_x:, dim_x:] = Sigh_tptp + muh_tptp - Sigh_ttp - Sigh_tpt - muh_ttp - muh_tpt + Sigh_tt + muh_tt
+        dxdx[dim_x:, :dim_x] = np.mean(dh[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+
+        bkx[:, dim_x:] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+        bkdx[:, dim_x:] = np.mean(bk[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
+
+        xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
+        dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
+
+        detd = np.linalg.det(Sigh[:-1, :, :])
+        dets = np.linalg.det(Sigh[:-1, dim_h:, dim_h:])
+        hSdouble = 0.5 * np.log(detd[detd > 0.0]).mean()
+        hSsimple = 0.5 * np.log(dets[dets > 0.0]).mean()
+        # TODO take care of initial value that is missing
+        return {"dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple}
 
 
 class EulerForceVisibleModel(EulerModel):

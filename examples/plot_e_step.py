@@ -8,7 +8,7 @@ Inner working of the E step :class:`GLE_analysisEM.GLE_Estimator`
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, adder
 
 # Printing options
 pd.set_option("display.max_rows", None)
@@ -41,23 +41,23 @@ Xproc, idx = est.model_class.preprocessingTraj(est.basis, X, idx_trajs=idx)
 traj_list = np.split(Xproc, idx)
 est.dim_coeffs_force = est.basis.nb_basis_elt_
 
-datas = 0.0
+datas = {}
 for n, traj in enumerate(traj_list):
-    datas_visible = sufficient_stats(traj, est.dim_x)
+    datas_visible = est.model_class.sufficient_stats(traj, est.dim_x)
     zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
     muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
-    datas += sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
+    adder(datas, est.model_class.sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force), len(traj_list))
 
 est._initialize_parameters(None)
 print(est.get_coefficients())
 print("Real datas")
 print(datas)
-new_stat = 0.0
+new_stat = {}
 noise_corr = 0.0
 for n, traj in enumerate(traj_list):
-    datas_visible = sufficient_stats(traj, est.dim_x)
+    datas_visible = est.model_class.sufficient_stats(traj, est.dim_x)
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
-    new_stat += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
+    adder(new_stat, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force), len(traj_list))
 print("Estimated datas")
 print(new_stat)
 print("Diff")

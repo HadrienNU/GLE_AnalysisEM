@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 # from matplotlib import pyplot as plt
-from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, sufficient_stats, sufficient_stats_hidden
+from GLE_analysisEM import GLE_Estimator, GLE_BasisTransform, adder
 from sklearn.preprocessing import FunctionTransformer
 
 # from GLE_analysisEM.utils import loadTestDatas_est
@@ -71,13 +71,13 @@ Xproc, idx = est.model_class.preprocessingTraj(basis, X, idx_trajs=idx)
 traj_list = np.split(Xproc, idx)
 
 est._initialize_parameters(random_state=42)
-datas = 0.0
+datas = {}
 for n, traj in enumerate(traj_list):
-    datas_visible = sufficient_stats(traj, est.dim_x)
+    datas_visible = est.model_class.sufficient_stats(traj, est.dim_x)
     zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
     # muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
-    datas += sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force) / len(traj_list)
+    adder(datas, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force), len(traj_list))
     # print(datas)
 
 print(generator.get_coefficients())
