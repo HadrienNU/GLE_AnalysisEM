@@ -65,20 +65,25 @@ class OBABO_Model(AbstractModel):
         # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) :$
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
         Basis_l = self.dim_basis
-        x_np1 =  traj[:, : 1 * self.dim_x] + dt**2 / 2 * np.matmul(force_coeffs,  traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) .T
-        v_np1 =  dt/2 * np.matmul(A_coeffs[:, : self.dim_x], 
-                                np.matmul(force_coeffs, traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ].T) +  np.matmul(force_coeffs,  traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x ].T) ).T
-        
+        x = traj[:, : self.dim_x]
+        x_plus = traj[:, self.dim_x : 2 * self.dim_x]
+        bk = traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ]
+        bk_plus = traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x ]
+        force = np.matmul(bk , force_coeffs.T)
+        force_plus = np.matmul(bk_plus, force_coeffs.T)
+        A_fric = A_coeffs[:,: self.dim_x]
+        x_np1 =  traj[:, : self.dim_x] + (dt**2 / 2 * force)
+        print(A_fric)
+        v_np1 =  dt / 2 * np.matmul((force + force_plus),  A_fric.T)
         mutilde = np.hstack(( x_np1 , v_np1 ))
         
-        A2 = np.matmul(A_coeffs[:, : self.dim_x],A_coeffs[:, : self.dim_x])        
-        R = np.asarray([ dt * A_coeffs , A2]).reshape((self.dim_x + dim_h, dim_h))
-        Xtplus = traj[:, self.dim_x : 2 * self.dim_x ]
+        A2 = np.matmul(A_coeffs, A_coeffs)
+        R = np.vstack((dt * A_coeffs , A2)) #.reshape((self.dim_x + dim_h, dim_h))
         Id = np.identity(self.dim_x)
         SIG_TETHA = np.asarray([[ 0 * Id  , dt * diffusion_coeffs * Id ],
                                 [ diffusion_coeffs * Id , np.matmul(A_coeffs[:, : self.dim_x], Id)]]).reshape((self.dim_x + dim_h, self.dim_x + dim_h))
         
-        return Xtplus, mutilde, R, SIG_TETHA
+        return x_plus, mutilde, R, SIG_TETHA
 
 
     def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
@@ -86,12 +91,14 @@ class OBABO_Model(AbstractModel):
         TODO:   -Select dimension of fitted parameters from the sufficient stats
         """
         if OptimizeForce:
-            invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
-            YX = sufficient_stat["xdx"].T - np.matmul(sufficient_stat["bkdx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
-            XX = sufficient_stat["xx"] - np.matmul(sufficient_stat["bkx"].T, np.matmul(invbkbk, sufficient_stat["bkx"]))
-            A = -np.matmul(YX, np.linalg.inv(XX))
+            invBBT = np.linalg.inv(sufficient_stat["BBT"])
+            ABT = sufficient_stat["ABT"]
+            #invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
+            C = np.matmul(ABT, invBBT)
+            
+            A = scipy.linalg.expm(scipy.linalg.logm(C[:dim_h,:dim_h]+np.identity(dim_h))/2)
 
-            force_coeffs = (np.matmul(sufficient_stat["bkdx"].T, invbkbk) / dt - np.matmul(A, np.matmul(sufficient_stat["bkx"].T, invbkbk)) / dt)[: self.dim_x, :]
+            force_coeffs = C[:dim_x,dim_h:]  / dt / A[0,0] 
         else:
             force_coeffs = coeffs_force_old
             Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
