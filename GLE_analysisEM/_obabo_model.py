@@ -37,7 +37,8 @@ class OBABO_Model(AbstractModel):
         x_plus = np.roll(x, -1, axis=0)
         bk = basis.fit_transform(x)
         bk_plus = basis.fit_transform(x_plus)
-        Xtraj = np.hstack((x, x_plus, bk, bk_plus))
+        v = X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
+        Xtraj = np.hstack((x, x_plus, bk, bk_plus, v))
         self.dim_basis = basis.nb_basis_elt_
         # Remove the last element of each trajectory
         traj_list = np.split(Xtraj, idx_trajs)
@@ -61,28 +62,41 @@ class OBABO_Model(AbstractModel):
         Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
         Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
         # mutilde = (np.matmul(-A[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T))).T
-
+        
         # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) :$
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
         Basis_l = self.dim_basis
-        x = traj[:, : self.dim_x]
-        x_plus = traj[:, self.dim_x : 2 * self.dim_x]
-        bk = traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x]
-        bk_plus = traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x]
-        force = np.matmul(bk, force_coeffs.T)
+        mutilde = np.zeros((len(traj), self.dim_x + dim_h))
+        R = np.zeros((self.dim_x + dim_h, dim_h)) 
+        sig_tetha = np.zeros((self.dim_x + dim_h, self.dim_x + dim_h))
+
+        q = traj[:, : self.dim_x]
+        q_plus = traj[:, self.dim_x : 2 * self.dim_x]
+
+        bk = traj[:, 2 * self.dim_x : (2 + Basis_l) * self.dim_x ]
+        bk_plus = traj[:, (2 + Basis_l) * self.dim_x : (2 + 2 * Basis_l) * self.dim_x ]
+        
+        force = np.matmul(bk , force_coeffs.T)
         force_plus = np.matmul(bk_plus, force_coeffs.T)
-        A_fric = A_coeffs[:, : self.dim_x]
-        x_np1 = traj[:, : self.dim_x] + (dt**2 / 2 * force)
-        print(A_fric)
-        v_np1 = dt / 2 * np.matmul((force + force_plus), A_fric.T)
-        mutilde = np.hstack((x_np1, v_np1))
+        
+        AVV = A_coeffs[:self.dim_x,:self.dim_x]
+        AHV = A_coeffs[self.dim_x:,:self.dim_x]
+        AVH = A_coeffs[:self.dim_x,self.dim_x:]
+        AHH = A_coeffs[self.dim_x:,self.dim_x:]
 
-        A2 = np.matmul(A_coeffs, A_coeffs)
-        R = np.vstack((dt * A_coeffs, A2))  # .reshape((self.dim_x + dim_h, dim_h))
-        Id = np.identity(self.dim_x)
-        SIG_TETHA = np.asarray([[0 * Id, dt * diffusion_coeffs * Id], [diffusion_coeffs * Id, np.matmul(A_coeffs[:, : self.dim_x], Id)]]).reshape((self.dim_x + dim_h, self.dim_x + dim_h))
+        mutilde_q_np1 =  q + (dt**2 / 2 * force)
+        #print(A_fric)
+        #print(force_coeffs)
+        mutilde_v_np1 =  dt / 2 * np.matmul((force + force_plus),  AVV.T)
+        mutilde[:,: 2 * self.dim_x] = np.hstack(( mutilde_q_np1 , mutilde_v_np1 ))
+        
+        AVV2 = np.matmul(AVV, AVV)
 
-        return x_plus, mutilde, R, SIG_TETHA
+        R = np.vstack((dt * AVV , AVV2)) 
+        sig_tetha[:,:] = np.asarray([[ 0  , dt * diffusion_coeffs[0,0]],
+                                [ diffusion_coeffs[0,0] , diffusion_coeffs[0,0]* AVV[0,0] ]]).reshape((self.dim_x + dim_h, self.dim_x + dim_h))
+        
+        return q_plus, mutilde, R, sig_tetha
 
     def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
         """M step.
@@ -147,7 +161,7 @@ class OBABO_Model(AbstractModel):
         p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t + gauss[: self.dim_x]
         return x_tp, p_tp, h_tp
 
-    def sufficient_stats(traj, dim_x):
+    def sufficient_stats(self, traj, dim_x):
         """
         Given a sample of trajectory, compute the averaged values of the sufficient statistics
         Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -167,7 +181,7 @@ class OBABO_Model(AbstractModel):
 
         return {"dxdx": np.zeros((dim_x, dim_x)), "xdx": np.zeros((dim_x, dim_x)), "xx": np.zeros((dim_x, dim_x)), "bkx": np.zeros((dim_bk, dim_x)), "bkdx": np.zeros((dim_bk, dim_x)), "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0}
 
-    def sufficient_stats_hidden(muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="obabo"):
+    def sufficient_stats_hidden(self, muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="obabo"):
         """
         Compute the sufficient statistics averaged over the hidden variable distribution
         Datas are stacked as (x, x_plus, bk, bk_plus)
@@ -187,7 +201,10 @@ class OBABO_Model(AbstractModel):
         # bkdx[:, :dim_x] = old_stats["bkdx"]
         # xval = traj[:-1, 2 * dim_x : 3 * dim_x]
         # dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
+        q = traj[:-1, : dim_x ]
+        q_plus = traj[:-1, dim_x : 2 * dim_x ]
         bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_force * dim_x]
+        print(bk, q , bk - q)
         bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x :]
 
         x = muh[:-1, dim_h:]

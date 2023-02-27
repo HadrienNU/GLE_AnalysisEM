@@ -428,18 +428,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigh : array-like, shape (n_timstep, 2*dim_h,2*dim_h)
             Covariances of the pair of the hidden variables
         """
-        Xtplus, mutilde, R, SIG_TETHA = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt, self.diffusion_coeffs)
-        print(
-            f"""
-        Xtplus : {Xtplus, Xtplus.shape } \n
-        mutilde : {mutilde, mutilde.shape } \n
-        R :  {R, R.shape} \n
-        SIG_TETHA : {SIG_TETHA , SIG_TETHA.shape}
-        self.mu0 : {self.mu0 , self.mu0.shape}
-        self.sig0 : {self.sig0 , self.sig0.shape}
-        """
-        )
-        return filtersmoother(Xtplus, mutilde, R, SIG_TETHA, self.mu0, self.sig0)
+        Xtplus, mutilde, R, sig_tetha = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt, self.diffusion_coeffs)
+#       print()
+        return filtersmoother(Xtplus, mutilde, R, sig_tetha, self.mu0, self.sig0)
 
     def _e_step_stats(self, traj_list, datas_visible):
         new_stat = {}
