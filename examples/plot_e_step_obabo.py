@@ -19,15 +19,17 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
-datapath="../Langevin_obabo_Harmonic/Langevin_12/"
+datapath="../Langevin_obabo_Harmonic_Force/Langevin_12/"
 
 dim_x = 1
 hidden_var = 0
 dim_h = dim_x + hidden_var # hidden speeds and hidden var   
 random_state = None
-force = -np.identity(dim_x)
+force = -np.identity(dim_x) * 500
 A = [[300.]]
+friction = A
 print(f"original A = {np.exp(-300.*0.0005/2)}")
+print("C'est le bon fichier")
 C = np.identity(dim_h) / 0.0029102486697617723  
 
 basis = GLE_BasisTransform(basis_type="linear")
@@ -43,7 +45,7 @@ Ntrajs = len(paths)
 #print(Ntrajs)
 #print(paths)
 X, idx = datas_loaders.loadData(paths, dim_x, maxlenght=maxlenght)
-print (X.shape)
+#print (X.shape)
 n = 0
 
 xva_list = []
@@ -62,12 +64,7 @@ est._check_initial_parameters()
 
 Xproc, idx = est.model_class.preprocessingTraj(est.basis, X, idx_trajs=idx)
 
-
-
-
-Xproc2 = Xproc
-
-traj_list = np.split(Xproc2, idx)
+traj_list = np.split(Xproc, idx)
 est.dim_coeffs_force = est.basis.nb_basis_elt_
 
 datas = {}
@@ -96,40 +93,44 @@ print(new_stat)
 print("Diff")
 #print((new_stat - datas) / np.abs(datas))
 
-traj_list = np.split(Xproc2, idx)
+traj_list = np.split(Xproc, idx)
 
 C_f = 0
+BBT = 0
+ABT = 0
 for n, traj in enumerate(traj_list):
     bk = traj[:-1, 2: 3]
     bk_plus = traj[:-1, 3: 4]
     q  =  traj[:-1, 0: 1]
     q_plus = traj[:-1, 1: 2]
-    v = traj[:-1, 4: 5]
-    dv = traj[1:, 4: 5] - traj[:-1, 4: 5]
-    B = np.hstack((v, (bk + bk_plus) / 2))
-    print(B.shape)
-    BBT = np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )
-    print(BBT.shape)
-    invBBT = np.linalg.inv(BBT)
-    ABT = np.mean(dv[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )
-    print(ABT.shape)
-    C = np.einsum('ij,jh->ih', ABT, invBBT)
-    C_f += C
-C_f = C_f/len(traj_list)
-    
+    v  =  traj[:-1, 4: 5]
+    B = np.hstack( (est.dt * v, est.dt**2 / 2 * bk))
+    print ("dt =", est.dt)
+    A = q_plus-q 
+    print("B.shape = ", B.shape)
+    print("A.shape = ", B.shape)
+    BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+    print("BBT.shape =", BBT.shape)
+    ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+
+invBBT = np.linalg.inv(BBT)
+C_f = np.matmul(ABT,invBBT)
+
 print(C_f)
 
-A = scipy.linalg.expm(scipy.linalg.logm( C_f[ : , :dim_h ] + np.identity(dim_x)) / 2)
+A = C_f[0,0]
 
-force_coeffs = C_f[ :dim_x , dim_h: ] / est.dt / A[0, 0]
+force_coeffs = C_f[0,1]
 
 print(A, force_coeffs)
 
-print("friction = ", friction)
+print("Input friction = ", friction)
 
-print("force_coeff = ", force)
+print("Input force_coeff = ", force)
 
+print("Output friction = ", A)
 
+print("Output force_coeff", force_coeffs)
 
 print(Sigh[:, 0, 0])
 fig, axs = plt.subplots(1, dim_h)
@@ -140,7 +141,7 @@ axs.plot(time[:-4], muh[:-3, 0] - 2 * np.sqrt(Sigh[:-3, 0, 0]), "--", color="blu
 axs.plot(time[:-4], Sigh[:-3, 0, 0], label="Sigma error", color="cyan")
 #axs.plot(time[:-1], mutilde[:, 1] , label="Mutilde_v", color="red")
 #axs.plot(time[:-1], mutilde[:, 0] , label="Mutilde_x", color="darkgreen")
-axs.plot(time[:-4], v[:-5], label="Real_v", color="orange")
+axs.plot(time[:-4], v[:-2,0], label="Real_v", color="orange")
 #axs.plot(time[:-1], x[:-1], label="Real_x", color="green")
 axs.legend(loc="upper right")
 plt.show()

@@ -1,5 +1,5 @@
 """
-This the main estimator module
+This is the obabo model module where velocity is a hidden variable of the problem.
 """
 import numpy as np
 import scipy.linalg
@@ -108,9 +108,9 @@ class OBABO_Model(AbstractModel):
             # invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
             C = np.matmul(ABT, invBBT)
 
-            A = scipy.linalg.expm(scipy.linalg.logm(C[:dim_h, :dim_h] + np.identity(dim_h)) / 2)
+            A = C[:self.dim_x,:dim_h] / dt
 
-            force_coeffs = C[: self.dim_x, dim_h:] / dt / A[0, 0]
+            force_coeffs = C[: self.dim_x, dim_h:] / dt**2 * 2
         else:
             force_coeffs = coeffs_force_old
             Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
@@ -127,6 +127,8 @@ class OBABO_Model(AbstractModel):
             bkdx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkdx"]))
             bkx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
 
+            bkq = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkq"]))
+
             residuals = sufficient_stat["dxdx"] + np.matmul(A, sufficient_stat["xdx"]) + np.matmul(A, sufficient_stat["xdx"]).T - bkdx.T - bkdx
             residuals += np.matmul(A, np.matmul(sufficient_stat["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
             SST = 0.5 * (residuals + residuals.T)
@@ -138,12 +140,11 @@ class OBABO_Model(AbstractModel):
         """
         Return the current value of the log-likelihood
         """
-        Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
+        bkbk = np.matmul(coeffs_force, np.matmul(suff_datas["bkbk"], coeffs_force.T))
+        bkdx = np.matmul(coeffs_force, suff_datas["bkdx"]) # force * a.T
+        bkx = np.matmul(coeffs_force, suff_datas["bkx"]) # force * v.T
 
-        bkbk = np.matmul(Pf, np.matmul(np.matmul(coeffs_force, np.matmul(suff_datas["bkbk"], coeffs_force.T)), Pf.T))
-        bkdx = np.matmul(Pf, np.matmul(coeffs_force, suff_datas["bkdx"]))
-        bkx = np.matmul(Pf, np.matmul(coeffs_force, suff_datas["bkx"]))
+        bkq = np.matmul(coeffs_force, suff_datas["bkq"]) # force * x.T
 
         m1 = suff_datas["dxdx"] + np.matmul(A, suff_datas["xdx"]) + np.matmul(A, suff_datas["xdx"]).T - bkdx.T - bkdx
         m1 += np.matmul(A, np.matmul(suff_datas["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
@@ -154,12 +155,13 @@ class OBABO_Model(AbstractModel):
         return quad_part - 0.5 * logdet
 
     def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
-        x_tp = x_t + dt * p_t
-        force_t = dt * np.matmul(force_coeffs, basis.transform(np.reshape(x_t, (1, -1)))[0])
+        #x_tp = x_t + dt * p_t
+        #force_t = dt * np.matmul(force_coeffs, basis.transform(np.reshape(x_t, (1, -1)))[0])
 
-        h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]
-        p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t + gauss[: self.dim_x]
-        return x_tp, p_tp, h_tp
+        #h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]
+        #p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t + gauss[: self.dim_x]
+        pass
+        #return x_tp, p_tp, h_tp
 
     def sufficient_stats(self, traj, dim_x):
         """
@@ -170,7 +172,8 @@ class OBABO_Model(AbstractModel):
         # xval = traj[:-1, 2 * dim_x : 3 * dim_x]
         # dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
         dim_bk = int(len(traj[0, 2 * dim_x :]) / 2)
-        print(dim_bk, type(dim_bk))
+
+        #print(dim_bk, type(dim_bk))
         bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_bk]
         # xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
         # xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
@@ -204,7 +207,7 @@ class OBABO_Model(AbstractModel):
         q = traj[:-1, : dim_x ]
         q_plus = traj[:-1, dim_x : 2 * dim_x ]
         bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_force * dim_x]
-        print(bk, q , bk - q)
+        #print(bk, q , bk - q)
         bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x :]
 
         x = muh[:-1, dim_h:]
@@ -232,21 +235,22 @@ class OBABO_Model(AbstractModel):
 
         bkx[:, :] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
         bkdx[:, :] = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        bkq = np.mean(bk[:, :, np.newaxis] * q[:, np.newaxis, :], axis=0)
 
         # xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
         # dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
 
-        B = np.hstack((x, (bk + bk_plus) / 2))
-        print(f"B = {B, B.shape}")
+        B = np.hstack((x, bk))
+        #print(f"B = {B, B.shape}")
         BBT = np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
-        print(f"BBT = {BBT, BBT.shape}")
-
+        #print(f"BBT = {BBT, BBT.shape}")
+        A = q_plus-q
         ABT = np.mean(dx[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
-        print(f"ABT = {ABT, ABT.shape}")
+        #print(f"ABT = {ABT, ABT.shape}")
 
         detd = np.linalg.det(Sigh[:-1, :, :])
         dets = np.linalg.det(Sigh[:-1, dim_h:, dim_h:])
         hSdouble = 0.5 * np.log(detd[detd > 0.0]).mean()
         hSsimple = 0.5 * np.log(dets[dets > 0.0]).mean()
         # TODO take care of initial value that is missing
-        return {"BBT": BBT, "ABT": ABT, "dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple}
+        return {"BBT": BBT, "ABT": ABT, "q": q , "bkq": bkq, "dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple}
