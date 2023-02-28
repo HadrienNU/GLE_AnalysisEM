@@ -173,7 +173,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         return {"X_types": "2darray"}
 
     def set_init_coeffs(self, coeffs):
-        """Set the initial values of the coefficients via a dict
+        """
+        Set the initial values of the coefficients via a dict
 
         Parameters
         ----------
@@ -189,7 +190,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.A_init, self.C_init, self.force_init, self.mu_init, self.sig_init = init_coeffs
 
     def _check_initial_parameters(self):
-        """Check values of the basic parameters."""
+        """
+        Check values of the basic parameters.
+        """
         if self.dt <= 0.0:
             raise ValueError("Invalid value for 'dt': %d " "Timestep should be positive" % self.dt)
         if self.dim_h < 0:
