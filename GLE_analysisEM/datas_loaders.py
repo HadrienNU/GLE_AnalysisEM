@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.model_selection import ShuffleSplit
 
 
-def loadData(paths, dim_x, maxlenght=None):
+def loadData(paths, dim_x, maxlenght=None, readvelocity=True):
     """Loads trajectories from a list of file
 
     Parameters
@@ -27,7 +27,16 @@ def loadData(paths, dim_x, maxlenght=None):
         else:
             tps = np.asarray(trj[:maxlenght, :1] - trj[0, 0])  # Set origin of time to zero
             pos = np.asarray(trj[:maxlenght, 1 : 1 + dim_x])
-        velocity = np.gradient(pos, tps[:, 0], axis=0)
+        
+
+        if trj.shape[1] > 1 + dim_x and readvelocity :
+            if maxlenght is None:
+                velocity = np.asarray(trj[:, 1 + dim_x : 1 + 2 * dim_x] )
+            else:
+                velocity = np.asarray(trj[:maxlenght, 1 + dim_x : 1 + 2 * dim_x] )
+        else:
+            velocity = np.gradient(pos, tps[:, 0], axis=0)
+        
         txv = np.hstack((tps, pos, velocity))
         if X is None:
             X = txv
