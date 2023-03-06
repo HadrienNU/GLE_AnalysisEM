@@ -19,16 +19,16 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
-datapath="../Langevin_obabo_Harmonic_Force/Langevin_12/"
+datapath="../Langevin_obabo_Harmonic_Force/Langevin_2/"
 
 dim_x = 1
 hidden_var = 0
 dim_h = dim_x + hidden_var # hidden speeds and hidden var   
 random_state = None
 force = -np.identity(dim_x) * 500
-A = [[300.]]
+A = [[50.]]
 friction = A
-print(f"original A = {np.exp(-300.*0.0005/2)}")
+print(f"original A = {np.exp(-A[0][0]*0.0005/2)}")
 print("C'est le bon fichier")
 C = np.identity(dim_h) / 0.0029102486697617723  
 
@@ -86,12 +86,14 @@ for n, traj in enumerate(traj_list):
     muh , Sigh = est._e_step(traj)
     #muh , Sigh = filtersmoother
       # Compute hidden variable distribution
-    #adder(new_stat, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force), len(traj_list))
+    adder(new_stat, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force), len(traj_list))
 
 print("Estimated datas")
 print(new_stat)
 print("Diff")
 #print((new_stat - datas) / np.abs(datas))
+
+force_m, friction_m, diffusion_m = est.model_class.m_step(None, None, None, new_stat, est.dim_h, est.dt, est.OptimizeDiffusion, est.OptimizeForce)
 
 traj_list = np.split(Xproc, idx)
 
@@ -130,7 +132,13 @@ print("Input force_coeff = ", force)
 
 print("Output friction = ", A)
 
-print("Output force_coeff", force_coeffs)
+print("Output force_coeff = ", force_coeffs)
+
+print("M Output friction = ", force_m)
+
+print("M Output force_coeff = ", friction_m)
+
+print("M Output diffusion_coeff = ",  diffusion_m)
 
 print(Sigh[:, 0, 0])
 fig, axs = plt.subplots(1, dim_h)

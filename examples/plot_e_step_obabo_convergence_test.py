@@ -19,10 +19,11 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
-Nsteps = [10**n for n in range(1,5)]
-A_ref = [300. for n in range(1,5)]
-force_ref = [-500 for n in range(1,5)]
+Nsteps = [10**n for n in range(1,6)]
+A_ref = [300. for n in range(1,6)]
+force_ref = [-500 for n in range(1,6)]
 A_res = []
+A_res2 = []
 force_res = []
 dim_x = 1
 hidden_var = 0
@@ -37,9 +38,7 @@ C = np.identity(dim_h) / 0.0029102486697617723
 basis = GLE_BasisTransform(basis_type="linear")
 Ntrajs = 0
 run = 1
-verbose = 2
-
-maxlenght = None
+verbose = 0
 
 for i in Nsteps:
     datapath=f"../Langevin_obabo_Harmonic_Force/Langevin_Nstep{i}/"
@@ -49,20 +48,20 @@ for i in Nsteps:
     Ntrajs = len(paths)
     #print(Ntrajs)
     #print(paths)
-    X, idx = datas_loaders.loadData(paths, dim_x, maxlenght=maxlenght)
+    X, idx = datas_loaders.loadData(paths, dim_x)
     #print (X.shape)
     n = 0
 
     xva_list = []
     path = paths[0]
-    trj=np.loadtxt(str(path))
-    x = trj[:,1]
-    v = trj[:,2]
+    #trj=np.loadtxt(str(path))
+    #x = trj[:,1]
+    #v = trj[:,2]
     
     time = np.split(X, idx)[0][:, 0]
     
     est = GLE_Estimator(model = 'obabo', init_params = "user", dim_x = dim_x, dim_h = dim_h, basis = basis, 
-                        A_init = A_init , C_init = C , force_init = force, sig_init = C, mu_init = np.zeros((dim_h)),  random_state = None, verbose = verbose, )
+                        A_init = A_init , C_init = C , force_init = force, sig_init = C, mu_init = np.zeros((dim_h)),  random_state = None, verbose = verbose)
     est.dt = time[1] - time[0]
     est._check_initial_parameters()
     
@@ -72,7 +71,7 @@ for i in Nsteps:
     est.dim_coeffs_force = est.basis.nb_basis_elt_
     
     datas = {}
-    print(traj_list[0])
+    #print(traj_list[0])
     #for n, traj in enumerate(traj_list):
         #datas_visible = sufficient_stats(traj, est.dim_x)
         #zero_sig = np.zeros((len(traj), 2 * est.dim_h, 2 * est.dim_h))
@@ -110,13 +109,14 @@ for i in Nsteps:
         v  =  traj[:-1, 4: 5]
         B = np.hstack( (est.dt * v, est.dt**2 / 2 * bk))
         #print ("dt =", est.dt)
-        A = q_plus-q 
+        A = q_plus - q 
         #print("B.shape = ", B.shape)
         #print("A.shape = ", B.shape)
         BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
         #print("BBT.shape =", BBT.shape)
         ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
-        
+
+
     invBBT = np.linalg.inv(BBT)
     C_f = np.matmul(ABT,invBBT)
     
@@ -135,10 +135,12 @@ for i in Nsteps:
     print("Output friction = ", A)
     
     print("Output force_coeff", force_coeffs)
+
+
     
     A_res.append(-np.log(A)*2/est.dt)
     force_res.append(force_coeffs)
-    print(Sigh[:, 0, 0])
+    #print(Sigh[:, 0, 0])
     ## plt.show()
     #axs.plot(time[:-4], muh[:-3, 0] , label="Prediction (with \\pm 2 \\sigma error lines)", color="blue")
     #axs.plot(time[:-4], muh[:-3, 0] + 2 * np.sqrt(Sigh[:-3, 0, 0]), "--", color="blue", linewidth=0.1)
@@ -149,6 +151,35 @@ for i in Nsteps:
     #axs.plot(time[:-4], v[:-2,0], label="Real_v", color="orange")
     #axs.plot(time[:-1], x[:-1], label="Real_x", color="green")
     #axs.legend(loc="upper right")()
+    traj_list = np.split(Xproc, idx)
+    
+    C_f = 0
+    BBT = 0
+    ABT = 0
+    for n, traj in enumerate(traj_list):
+        bk = traj[:-1, 2: 3]
+        bk_plus = traj[:-1, 3: 4]
+        q  =  traj[:-1, 0: 1]
+        q_plus = traj[:-1, 1: 2]
+        v  =  traj[:-1, 4: 5]
+        #print(v.shape, bk.shape)
+        B = np.hstack((est.dt * v)).reshape(v.shape)
+        #print ("dt =", est.dt)
+        A = q_plus - q - (force_coeffs * (est.dt**2)/2 * bk)
+        #print("B.shape = ", B.shape)
+        #print("A.shape = ", B.shape)
+        BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+        #print("BBT.shape =", BBT.shape)
+        ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+
+    invBBT = np.linalg.inv(BBT)
+    C_f = np.matmul(ABT,invBBT)
+
+    A = C_f[0,0]
+
+    print("Input New friction = ", A)
+    A_res2.append(-np.log(A)*2/est.dt)
+
 
 print(force_res, A_res)
     
@@ -158,6 +189,7 @@ fig, axs = plt.subplots(3)
 axs[0].plot(Nsteps, A_ref , label="Ref_friction", color="red")
 axs[1].plot(Nsteps, force_ref , label="Ref_force", color="red")
 axs[0].plot(Nsteps, A_res , label="Results_friction", color="green")
+axs[0].plot(Nsteps, A_res2 , label="Results_friction", color="darkgreen")
 axs[1].plot(Nsteps, force_res , label="Results_force", color="green")
 plt.yscale("log")
 axs[2].plot(Nsteps, np.asarray(Nsteps)*100 , label="Number of points", color="green")
