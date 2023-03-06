@@ -40,7 +40,7 @@ def adder(accumulator, element, factor):
 
 def e_step_worker_pool(est, traj, datas_visible):
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
-    return est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force)
+    return est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h_kalman, est.dim_coeffs_force)
 
 
 class GLE_Estimator(DensityMixin, BaseEstimator):
@@ -208,6 +208,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             raise ValueError("Model {} not implemented".format(self.model))
         self.model_class = model_class[self.model](self.dim_x)
 
+        self.dim_h_kalman = self.dim_x * int(self.model_class.hidden_v) + self.dim_h  # Should take into account if velocity are known or inferred
+
         if self.init_params == "user":
             if self.n_init != 1:
                 self.n_init = 1
@@ -221,24 +223,24 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             #     raise ValueError("No initial values for initial conditions are provided and init_params is set to user defined")
 
         if self.A_init is not None:
-            if np.asarray(self.A_init).shape != (self.dim_h, self.dim_h):
+            if np.asarray(self.A_init).shape != (self.dim_x + self.dim_h, self.dim_x + self.dim_h):
                 raise ValueError("Wrong dimensions for A_init")
             if self.C_init is None:
-                self.C_init = np.identity(self.dim_h)
+                self.C_init = np.identity(self.dim_x + self.dim_h)
             expA, SST = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
             if not np.all(np.linalg.eigvals(SST) > 0):
                 raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
 
         if self.C_init is not None:
-            if np.asarray(self.C_init).shape != (self.dim_h, self.dim_h):
+            if np.asarray(self.C_init).shape != (self.dim_x + self.dim_h, self.dim_x + self.dim_h):
                 raise ValueError("Wrong dimensions for C_init")
 
         if self.mu_init is not None:
-            if np.asarray(self.mu_init).shape != (self.dim_h,):
+            if np.asarray(self.mu_init).shape != (self.dim_h_kalman,):
                 raise ValueError("Provided user values for initial mean of hidden variables have wrong shape, provided {}, wanted {}".format(np.asarray(self.mu_init).shape, (self.dim_h,)))
 
         if self.sig_init is not None:
-            if np.asarray(self.sig_init).shape != (self.dim_h, self.dim_h):
+            if np.asarray(self.sig_init).shape != (self.dim_h_kalman, self.dim_h_kalman):
                 raise ValueError("Provided user values for initial variance of hidden variables have wrong shape, provided {}, wanted {}".format(np.asarray(self.sig_init).shape, (self.dim_h, self.dim_h)))
             if not np.all(np.linalg.eigvals(self.sig_init) >= 0):
                 raise ValueError("Provided user values for initial variance of hidden variables is not a definite positive diffusion matrix")
@@ -292,14 +294,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.mu_init is not None:
             self.mu0 = np.asarray(self.mu_init)
         else:
-            self.mu0 = np.zeros((self.dim_h))
+            self.mu0 = np.zeros((self.dim_h_kalman))
 
         if self.sig_init is not None:
             self.sig0 = np.asarray(self.sig_init)
         elif self.C_init is not None:
-            self.sig0 = self.C_init[self.dim_x :, self.dim_x :]
+            self.sig0 = self.C_init[int(not self.model_class.hidden_v) * self.dim_x :, int(not self.model_class.hidden_v) * self.dim_x :]
         else:
-            self.sig0 = np.identity(self.dim_h)
+            self.sig0 = np.identity(self.dim_h_kalman)
         self.initialized_ = True
 
     def fit(self, X, y=None, idx_trajs=[]):
@@ -432,7 +434,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             Covariances of the pair of the hidden variables
         """
         Xtplus, mutilde, R, sig_tetha = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt, self.diffusion_coeffs)
-#       print()
+        #       print()
         return filtersmoother(Xtplus, mutilde, R, sig_tetha, self.mu0, self.sig0)
 
     def _e_step_stats(self, traj_list, datas_visible):
@@ -446,7 +448,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         else:
             for traj in traj_list:
                 muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force), len(traj_list))
+                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h_kalman, self.dim_coeffs_force), len(traj_list))
         return new_stat
 
     def _m_step(self, sufficient_stat):
@@ -541,7 +543,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 datas_visible = self.model_class.sufficient_stats(traj, self.dim_x)
                 zero_sig = np.zeros((len(traj), 2 * self.dim_h, 2 * self.dim_h))
                 muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
-                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h, self.dim_coeffs_force), len(traj_list))
+                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h_kalman, self.dim_coeffs_force), len(traj_list))
         lower_bound = self.loglikelihood(new_stat)
         return lower_bound
 
@@ -568,9 +570,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for traj in traj_list:
             muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
             if muh_out is None:
-                muh_out = muh[:, self.dim_h :]
+                muh_out = muh[:, self.dim_h_kalman :]
             else:
-                muh_out = np.hstack((muh_out, muh[:, self.dim_h :]))
+                muh_out = np.hstack((muh_out, muh[:, self.dim_h_kalman :]))
         return muh_out
 
     def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3, burnout=0, rng=None):

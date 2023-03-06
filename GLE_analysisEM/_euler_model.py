@@ -8,6 +8,8 @@ from ._model_class import AbstractModel
 
 
 class EulerModel(AbstractModel):
+    hidden_v = False
+
     def _convert_user_coefficients(self, A, C, dt):
         """
         Convert the user provided coefficients into the local one
