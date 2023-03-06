@@ -8,6 +8,8 @@ from ._model_class import AbstractModel
 
 
 class OBABO_Model(AbstractModel):
+    hidden_v = True
+
     def _convert_user_coefficients(self, A, C, dt):
         """
         Convert the user provided coefficients into the local one
@@ -59,16 +61,18 @@ class OBABO_Model(AbstractModel):
         Datas are stacked as (x, x plus proj , bk , bk plus proj)
         return Xtplus, mutilde, R, SIG_TETHA
         """
-        Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
-        Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
+        #Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
+        #Pf[: self.dim_x, : self.dim_x] = dt * np.identity(self.dim_x)
         # mutilde = (np.matmul(-A[:, : self.dim_x], traj[:, 2 * self.dim_x : 3 * self.dim_x].T) + np.matmul(Pf, np.matmul(force_coeffs, traj[:, 3 * self.dim_x :].T))).T
         
         # NEW mutilde = ( 1 + dt**2 / 2 * SOMME(ck bk(x_n)) :$
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
         Basis_l = self.dim_basis
-        mutilde = np.zeros((len(traj), self.dim_x + dim_h))
-        R = np.zeros((self.dim_x + dim_h, dim_h)) 
-        sig_tetha = np.zeros((self.dim_x + dim_h, self.dim_x + dim_h))
+        mutilde = np.zeros((len(traj), 2 * self.dim_x + dim_h))
+        print(mutilde.shape)
+        R = np.zeros((2 * self.dim_x + dim_h, self.dim_x + dim_h)) 
+        sig_tetha = np.zeros(( 2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
+        #print(self.dim_x, dim_h)
 
         q = traj[:, : self.dim_x]
         q_plus = traj[:, self.dim_x : 2 * self.dim_x]
@@ -88,14 +92,18 @@ class OBABO_Model(AbstractModel):
         #print(A_fric)
         #print(force_coeffs)
         mutilde_v_np1 =  dt / 2 * np.matmul((force + force_plus),  AVV.T)
+        
+        print(mutilde_q_np1.shape)
+        print(mutilde_v_np1.shape)
+        
         mutilde[:,: 2 * self.dim_x] = np.hstack(( mutilde_q_np1 , mutilde_v_np1 ))
         
         AVV2 = np.matmul(AVV, AVV)
 
         R = np.vstack((dt * AVV , AVV2)) 
-        sig_tetha[:,:] = np.asarray([[ 0  , dt * diffusion_coeffs[0,0]],
-                                [ diffusion_coeffs[0,0] , diffusion_coeffs[0,0]* AVV[0,0] ]]).reshape((self.dim_x + dim_h, self.dim_x + dim_h))
-        
+        #print(diffusion_coeffs)
+        sig_tetha[:,:] = np.asarray([[ 0  , dt**2 * diffusion_coeffs[0,0]],
+                                [ diffusion_coeffs[0,0] , diffusion_coeffs[0,0]* AVV2[0,0] ]]).reshape(( 2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
         return q_plus, mutilde, R, sig_tetha
 
     def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
@@ -108,9 +116,9 @@ class OBABO_Model(AbstractModel):
             # invbkbk = np.linalg.inv(sufficient_stat["bkbk"])
             C = np.matmul(ABT, invBBT)
 
-            A = C[:self.dim_x,:dim_h] / dt
+            A = C[:self.dim_x,:self.dim_x] / dt
 
-            force_coeffs = C[: self.dim_x, dim_h:] / dt**2 * 2
+            force_coeffs = C[: self.dim_x, self.dim_x:] / dt**2 * 2
         else:
             force_coeffs = coeffs_force_old
             Pf = np.zeros((self.dim_x + dim_h, self.dim_x))
@@ -146,13 +154,14 @@ class OBABO_Model(AbstractModel):
 
         bkq = np.matmul(coeffs_force, suff_datas["bkq"]) # force * x.T
 
-        m1 = suff_datas["dxdx"] + np.matmul(A, suff_datas["xdx"]) + np.matmul(A, suff_datas["xdx"]).T - bkdx.T - bkdx
-        m1 += np.matmul(A, np.matmul(suff_datas["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
+        #m1 = suff_datas["dxdx"] + np.matmul(A, suff_datas["xdx"]) + np.matmul(A, suff_datas["xdx"]).T - bkdx.T - bkdx
+        #m1 += np.matmul(A, np.matmul(suff_datas["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
 
-        logdet = (self.dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
-        quad_part = -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1))
+        #logdet = (self.dim_x + dim_h) * np.log(2 * np.pi) + np.log(np.linalg.det(SST))
+        #quad_part = -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1))
         # print(SST, np.linalg.det(SST))
-        return quad_part - 0.5 * logdet
+        #print(quad_part.shape)
+        return  0 #quad_part - 0.5 * logdet
 
     def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
         #x_tp = x_t + dt * p_t
@@ -187,7 +196,7 @@ class OBABO_Model(AbstractModel):
     def sufficient_stats_hidden(self, muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="obabo"):
         """
         Compute the sufficient statistics averaged over the hidden variable distribution
-        Datas are stacked as (x, x_plus, bk, bk_plus)
+        Datas are stacked as (x, x_plus, bk, bk_plus, original_v)
         """
         # print("Suff_stats")
         xx = np.zeros((dim_h, dim_h))
@@ -208,11 +217,13 @@ class OBABO_Model(AbstractModel):
         q_plus = traj[:-1, dim_x : 2 * dim_x ]
         bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_force * dim_x]
         #print(bk, q , bk - q)
-        bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x :]
-
+        bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x : 2 * dim_x + 2 * dim_force * dim_x ]
+        
         x = muh[:-1, dim_h:]
+        #x = traj[:,2 * dim_x + 2 * dim_force * dim_x :]
+        #dx = x[1:] - x[:-1]
         dx = muh[:-1, :dim_h] - muh[:-1, dim_h:]
-
+        #x = x[:-1]
         Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
         Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
         Sigh_tpt = np.mean(Sigh[:-1, :dim_h, dim_h:], axis=0)
@@ -224,14 +235,14 @@ class OBABO_Model(AbstractModel):
         muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
 
         xx[:, :] = Sigh_tt + muh_tt
-        # xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+        ## xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
 
         xdx[:, :] = Sigh_ttp + muh_ttp - Sigh_tt - muh_tt
-        # xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-        # xdx[:dim_x, dim_x:] = np.mean(xval[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
+        ## xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        ## xdx[:dim_x, dim_x:] = np.mean(xval[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
 
         dxdx[:, :] = Sigh_tptp + muh_tptp - Sigh_ttp - Sigh_tpt - muh_ttp - muh_tpt + Sigh_tt + muh_tt
-        # dxdx[dim_x:, :dim_x] = np.mean(dh[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        ## dxdx[dim_x:, :dim_x] = np.mean(dh[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
 
         bkx[:, :] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
         bkdx[:, :] = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
@@ -245,7 +256,7 @@ class OBABO_Model(AbstractModel):
         BBT = np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
         #print(f"BBT = {BBT, BBT.shape}")
         A = q_plus-q
-        ABT = np.mean(dx[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
+        ABT = np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
         #print(f"ABT = {ABT, ABT.shape}")
 
         detd = np.linalg.det(Sigh[:-1, :, :])

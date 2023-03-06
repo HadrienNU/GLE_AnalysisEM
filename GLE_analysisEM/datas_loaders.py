@@ -27,7 +27,7 @@ def loadData(paths, dim_x, maxlenght=None, readvelocity=True):
         else:
             tps = np.asarray(trj[:maxlenght, :1] - trj[0, 0])  # Set origin of time to zero
             pos = np.asarray(trj[:maxlenght, 1 : 1 + dim_x])
-        
+
 
         if trj.shape[1] > 1 + dim_x and readvelocity :
             if maxlenght is None:
