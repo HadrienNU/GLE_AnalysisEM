@@ -19,18 +19,18 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
-datapath="../Langevin_obabo_Harmonic_Force/Langevin_2/"
+datapath="../Langevin_obabo_Harmonic_Force/Langevin_12/"
 
 dim_x = 1
 hidden_var = 0
-dim_h = dim_x + hidden_var # hidden speeds and hidden var   
+dim_h = 0 # dim_x + hidden_var # hidden speeds and hidden var   
 random_state = None
 force = -np.identity(dim_x) * 500
-A = [[50.]]
+A = [[300.]]
 friction = A
 print(f"original A = {np.exp(-A[0][0]*0.0005/2)}")
 print("C'est le bon fichier")
-C = np.identity(dim_h) / 0.0029102486697617723  
+C = np.identity(dim_x + dim_h) / 0.0029102486697617723  
 
 basis = GLE_BasisTransform(basis_type="linear")
 Ntrajs = 0
@@ -58,7 +58,7 @@ v = trj[:,2]
 time = np.split(X, idx)[0][:, 0]
 
 est = GLE_Estimator(model = 'obabo', init_params = "user", dim_x = dim_x, dim_h = dim_h, basis = basis, 
-                    A_init = A , C_init = C , force_init = force, sig_init = C, mu_init = np.zeros((dim_h)),  random_state = None, verbose = verbose, )
+                    A_init = A , C_init = C , force_init = force, sig_init = C, mu_init = np.zeros((dim_x + dim_h)),  random_state = None, verbose = verbose, )
 est.dt = time[1] - time[0]
 est._check_initial_parameters()
 
@@ -86,7 +86,7 @@ for n, traj in enumerate(traj_list):
     muh , Sigh = est._e_step(traj)
     #muh , Sigh = filtersmoother
       # Compute hidden variable distribution
-    adder(new_stat, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force), len(traj_list))
+    adder(new_stat, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h_kalman, est.dim_coeffs_force), len(traj_list))
 
 print("Estimated datas")
 print(new_stat)
@@ -101,18 +101,18 @@ C_f = 0
 BBT = 0
 ABT = 0
 for n, traj in enumerate(traj_list):
-    bk = traj[:-1, 2: 3]
-    bk_plus = traj[:-1, 3: 4]
+    bk = traj[:-1, 3: 4]
+    bk_plus = traj[:-1, 4: 5]
     q  =  traj[:-1, 0: 1]
     q_plus = traj[:-1, 1: 2]
-    v  =  traj[:-1, 4: 5]
+    v  =  traj[:-1, 2: 3]
     B = np.hstack( (est.dt * v, est.dt**2 / 2 * bk))
-    print ("dt =", est.dt)
+    #print ("dt =", est.dt)
     A = q_plus-q 
-    print("B.shape = ", B.shape)
-    print("A.shape = ", B.shape)
+    #print("B.shape = ", B.shape)
+    #print("A.shape = ", B.shape)
     BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
-    print("BBT.shape =", BBT.shape)
+    #print("BBT.shape =", BBT.shape)
     ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
 
 invBBT = np.linalg.inv(BBT)
@@ -141,7 +141,7 @@ print("M Output force_coeff = ", friction_m)
 print("M Output diffusion_coeff = ",  diffusion_m)
 
 print(Sigh[:, 0, 0])
-fig, axs = plt.subplots(1, dim_h)
+fig, axs = plt.subplots(1, dim_h + dim_x)
 ## plt.show()
 axs.plot(time[:-4], muh[:-3, 0] , label="Prediction (with \\pm 2 \\sigma error lines)", color="blue")
 axs.plot(time[:-4], muh[:-3, 0] + 2 * np.sqrt(Sigh[:-3, 0, 0]), "--", color="blue", linewidth=0.1)

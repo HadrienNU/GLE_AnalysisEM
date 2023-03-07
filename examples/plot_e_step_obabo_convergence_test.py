@@ -27,14 +27,14 @@ A_res2 = []
 force_res = []
 dim_x = 1
 hidden_var = 0
-dim_h = dim_x + hidden_var # hidden speeds and hidden var
+dim_h = 0 # dim_x + hidden_var # hidden speeds and hidden var
 random_state = None
 force = -np.identity(dim_x) * 500
 A_init = [[300.]]
 friction = A_init
 print(f"original A = {np.exp(A_init[0][0]*0.0005/2)}")
 print("C'est le bon fichier")
-C = np.identity(dim_h) / 0.0029102486697617723
+C = np.identity(dim_h + dim_x) / 0.0029102486697617723
 basis = GLE_BasisTransform(basis_type="linear")
 Ntrajs = 0
 run = 1
@@ -61,7 +61,7 @@ for i in Nsteps:
     time = np.split(X, idx)[0][:, 0]
     
     est = GLE_Estimator(model = 'obabo', init_params = "user", dim_x = dim_x, dim_h = dim_h, basis = basis, 
-                        A_init = A_init , C_init = C , force_init = force, sig_init = C, mu_init = np.zeros((dim_h)),  random_state = None, verbose = verbose)
+                        A_init = A_init , C_init = C , force_init = force, sig_init = C, mu_init = np.zeros((dim_h + dim_x)),  random_state = None, verbose = verbose)
     est.dt = time[1] - time[0]
     est._check_initial_parameters()
     
@@ -89,7 +89,7 @@ for i in Nsteps:
         muh , Sigh = est._e_step(traj)
         #muh , Sigh = filtersmoother
           # Compute hidden variable distribution
-        adder(new_stat, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h, est.dim_coeffs_force), len(traj_list))
+        adder(new_stat, est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h_kalman, est.dim_coeffs_force), len(traj_list))
     
     #print("Estimated datas")
     #print(new_stat)
@@ -98,34 +98,31 @@ for i in Nsteps:
     
     traj_list = np.split(Xproc, idx)
     
-    C_f = 0
-    BBT = 0
-    ABT = 0
-    for n, traj in enumerate(traj_list):
-        bk = traj[:-1, 2: 3]
-        bk_plus = traj[:-1, 3: 4]
-        q  =  traj[:-1, 0: 1]
-        q_plus = traj[:-1, 1: 2]
-        v  =  traj[:-1, 4: 5]
-        B = np.hstack( (est.dt * v, est.dt**2 / 2 * bk))
-        #print ("dt =", est.dt)
-        A = q_plus - q 
-        #print("B.shape = ", B.shape)
-        #print("A.shape = ", B.shape)
-        BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
-        #print("BBT.shape =", BBT.shape)
-        ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+#    C_f = 0
+#    BBT = 0
+#    ABT = 0
+    #for n, traj in enumerate(traj_list):
+#        bk = traj[:-1, 2: 3]
+#        bk_plus = traj[:-1, 3: 4]
+#        q  =  traj[:-1, 0: 1]
+#        q_plus = traj[:-1, 1: 2]
+#        v  =  traj[:-1, 4: 5]
+#        B = np.hstack( (est.dt * v, est.dt**2 / 2 * bk))
+#        #print ("dt =", est.dt)
+#        A = q_plus - q 
+#        #print("B.shape = ", B.shape)
+#        #print("A.shape = ", B.shape)
+#        BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+#        #print("BBT.shape =", BBT.shape)
+#        ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
 
 
-    invBBT = np.linalg.inv(BBT)
-    C_f = np.matmul(ABT,invBBT)
+#    invBBT = np.linalg.inv(BBT)
+#    C_f = np.matmul(ABT,invBBT)
+#    
+#    print(C_f)
     
-    print(C_f)
-    
-    A = C_f[0,0]
-    
-    force_coeffs = C_f[0,1]
-    
+    A , force_coeffs, diffusion_coeff = est.model_class.m_step(None, None, None, new_stat, est.dim_h, est.dt, est.OptimizeDiffusion, est.OptimizeForce)
     print(A, force_coeffs)
     
     print("Input friction = ", friction)
@@ -153,34 +150,35 @@ for i in Nsteps:
     #axs.legend(loc="upper right")()
     traj_list = np.split(Xproc, idx)
     
-    C_f = 0
-    BBT = 0
-    ABT = 0
-    for n, traj in enumerate(traj_list):
-        bk = traj[:-1, 2: 3]
-        bk_plus = traj[:-1, 3: 4]
-        q  =  traj[:-1, 0: 1]
-        q_plus = traj[:-1, 1: 2]
-        v  =  traj[:-1, 4: 5]
-        #print(v.shape, bk.shape)
-        B = np.hstack((est.dt * v)).reshape(v.shape)
-        #print ("dt =", est.dt)
-        A = q_plus - q - (force_coeffs * (est.dt**2)/2 * bk)
-        #print("B.shape = ", B.shape)
-        #print("A.shape = ", B.shape)
-        BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
-        #print("BBT.shape =", BBT.shape)
-        ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+    #C_f = 0
+    #BBT = 0
+    #ABT = 0
+    #for n, traj in enumerate(traj_list):
+    #    bk = traj[:-1, 2: 3]
+    #    bk_plus = traj[:-1, 3: 4]
+    #    q  =  traj[:-1, 0: 1]
+    #    q_plus = traj[:-1, 1: 2]
+    #    v  =  traj[:-1, 4: 5]
+    #    #print(v.shape, bk.shape)
+    #    B = np.hstack((est.dt * v)).reshape(v.shape)
+    #    #print ("dt =", est.dt)
+    #    A = q_plus - q - (force_coeffs * (est.dt**2)/2 * bk)
+    #    #print("B.shape = ", B.shape)
+    #    #print("A.shape = ", B.shape)
+    #    BBT += np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
+    #    #print("BBT.shape =", BBT.shape)
+    #    ABT += np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis = 0 )/len(traj_list)
 
-    invBBT = np.linalg.inv(BBT)
-    C_f = np.matmul(ABT,invBBT)
+    #invBBT = np.linalg.inv(BBT)
+    #C_f = np.matmul(ABT,invBBT)
 
-    A = C_f[0,0]
+    #A = C_f[0,0]
 
-    print("Input New friction = ", A)
-    A_res2.append(-np.log(A)*2/est.dt)
+    #print("Input New friction = ", A)
+    #A_res2.append(-np.log(A)*2/est.dt)
 
-
+force_res = np.asarray(force_res).reshape((len(force_ref),))
+A_res = np.asarray(A_res).reshape((len(A_ref),))
 print(force_res, A_res)
     
 fig, axs = plt.subplots(3)
@@ -189,7 +187,7 @@ fig, axs = plt.subplots(3)
 axs[0].plot(Nsteps, A_ref , label="Ref_friction", color="red")
 axs[1].plot(Nsteps, force_ref , label="Ref_force", color="red")
 axs[0].plot(Nsteps, A_res , label="Results_friction", color="green")
-axs[0].plot(Nsteps, A_res2 , label="Results_friction", color="darkgreen")
+#axs[0].plot(Nsteps, A_res2 , label="Results_friction", color="darkgreen")
 axs[1].plot(Nsteps, force_res , label="Results_force", color="green")
 plt.yscale("log")
 axs[2].plot(Nsteps, np.asarray(Nsteps)*100 , label="Number of points", color="green")
