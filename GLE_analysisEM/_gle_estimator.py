@@ -502,10 +502,10 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if dim_h is None:
             dim_h = self.dim_h
         ll = self.model_class.loglikelihood(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, dim_h, self.dt)
-        if dim_h > 0 and not np.isnan(suff_datas["hS"]):
+        if self.dim_h_kalman > 0 and not np.isnan(suff_datas["hS"]):
             return ll + suff_datas["hS"]
         else:
-            if dim_h > 0:
+            if self.dim_h_kalman > 0:
                 warnings.warn("NaN value in hidden entropy")
             return ll
 
@@ -541,7 +541,7 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             traj_list_h = np.split(Xh, idx_trajs)
             for n, traj in enumerate(traj_list):
                 datas_visible = self.model_class.sufficient_stats(traj, self.dim_x)
-                zero_sig = np.zeros((len(traj), 2 * self.dim_h, 2 * self.dim_h))
+                zero_sig = np.zeros((len(traj), 2 * self.dim_h_kalman, 2 * self.dim_h_kalman))
                 muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
                 adder(new_stat, self.model_class.sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h_kalman, self.dim_coeffs_force), len(traj_list))
         lower_bound = self.loglikelihood(new_stat)
