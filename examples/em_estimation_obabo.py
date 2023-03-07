@@ -21,7 +21,7 @@ dim_h = 0 #dim_x + hidden_var
 force = -np.identity(dim_x)
 A = [[300.]]
 friction = A
-print(f"original A = {np.exp(-A[0][0]*0.0005)}")
+print(f"original A = {np.exp(-A[0][0]*0.0005 / 2)}")
 datapath="../Langevin_obabo_Harmonic_Force/Langevin_12/"
 
 model = "obabo"
