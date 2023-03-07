@@ -32,7 +32,7 @@ random_state = None
 force = -np.identity(dim_x) * 500
 A_init = [[300.]]
 friction = A_init
-print(f"original A = {np.exp(A_init[0][0]*0.0005/2)}")
+print(f"original A = {np.exp(-A_init[0][0]*0.0005/2)}")
 print("C'est le bon fichier")
 C = np.identity(dim_h + dim_x) / 0.0029102486697617723
 basis = GLE_BasisTransform(basis_type="linear")

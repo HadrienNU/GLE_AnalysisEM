@@ -40,7 +40,7 @@ class OBABO_Model(AbstractModel):
         bk = basis.fit_transform(x)
         bk_plus = basis.fit_transform(x_plus)
         v = X[:, 1 + self.dim_x : 1 + 2 * self.dim_x]
-        Xtraj = np.hstack((x, x_plus, bk, bk_plus, v))
+        Xtraj = np.hstack((x, x_plus, v, bk, bk_plus))
         self.dim_basis = basis.nb_basis_elt_
         # Remove the last element of each trajectory
         traj_list = np.split(Xtraj, idx_trajs)
@@ -69,7 +69,7 @@ class OBABO_Model(AbstractModel):
         #                    e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n)) + e^(-gamma dt) * dt/2 * SOMME(ck bk(x_n+1))
         Basis_l = self.dim_basis
         mutilde = np.zeros((len(traj), 2 * self.dim_x + dim_h))
-        print(mutilde.shape)
+        #print(mutilde.shape)
         R = np.zeros((2 * self.dim_x + dim_h, self.dim_x + dim_h)) 
         sig_tetha = np.zeros(( 2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
         #print(self.dim_x, dim_h)
@@ -93,8 +93,8 @@ class OBABO_Model(AbstractModel):
         #print(force_coeffs)
         mutilde_v_np1 =  dt / 2 * np.matmul((force + force_plus),  AVV.T)
         
-        print(mutilde_q_np1.shape)
-        print(mutilde_v_np1.shape)
+        #print(mutilde_q_np1.shape)
+        #print(mutilde_v_np1.shape)
         
         mutilde[:,: 2 * self.dim_x] = np.hstack(( mutilde_q_np1 , mutilde_v_np1 ))
         
@@ -135,7 +135,7 @@ class OBABO_Model(AbstractModel):
             bkdx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkdx"]))
             bkx = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkx"]))
 
-            bkq = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkq"]))
+            #bkq = np.matmul(Pf, np.matmul(force_coeffs, sufficient_stat["bkq"]))
 
             residuals = sufficient_stat["dxdx"] + np.matmul(A, sufficient_stat["xdx"]) + np.matmul(A, sufficient_stat["xdx"]).T - bkdx.T - bkdx
             residuals += np.matmul(A, np.matmul(sufficient_stat["xx"], A.T)) - np.matmul(A, bkx.T) - np.matmul(A, bkx.T).T + bkbk
@@ -161,7 +161,8 @@ class OBABO_Model(AbstractModel):
         #quad_part = -np.trace(np.matmul(np.linalg.inv(SST), 0.5 * m1))
         # print(SST, np.linalg.det(SST))
         #print(quad_part.shape)
-        return  0 #quad_part - 0.5 * logdet
+        print("we are here")
+        return  0 #quad_part - 0.5 * logdet  
 
     def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
         #x_tp = x_t + dt * p_t
@@ -183,7 +184,7 @@ class OBABO_Model(AbstractModel):
         dim_bk = int(len(traj[0, 2 * dim_x :]) / 2)
 
         #print(dim_bk, type(dim_bk))
-        bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_bk]
+        bk = traj[:-1, 3 * dim_x : 3 * dim_x + dim_bk]
         # xx = np.mean(xval[:, :, np.newaxis] * xval[:, np.newaxis, :], axis=0)
         # xdx = np.mean(xval[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
         # dxdx = np.mean(dx[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
@@ -193,75 +194,78 @@ class OBABO_Model(AbstractModel):
 
         return {"dxdx": np.zeros((dim_x, dim_x)), "xdx": np.zeros((dim_x, dim_x)), "xx": np.zeros((dim_x, dim_x)), "bkx": np.zeros((dim_bk, dim_x)), "bkdx": np.zeros((dim_bk, dim_x)), "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0}
 
-    def sufficient_stats_hidden(self, muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="obabo"):
+    def sufficient_stats_hidden(self, muh, Sigh, traj, old_stats, dim_x, dim_h_kalman, dim_force, model="obabo"):
         """
         Compute the sufficient statistics averaged over the hidden variable distribution
         Datas are stacked as (x, x_plus, bk, bk_plus, original_v)
         """
         # print("Suff_stats")
-        xx = np.zeros((dim_h, dim_h))
-        # xx = np.zeros((dim_x + dim_h, dim_x + dim_h))
+        xx = np.zeros((dim_h_kalman, dim_h_kalman))
+        # xx = np.zeros((dim_x + dim_h_kalman, dim_x + dim_h_kalman))
         # xx[:dim_x, :dim_x] = old_stats["xx"]
-        xdx = np.zeros((dim_h, dim_h))
+        xdx = np.zeros((dim_h_kalman, dim_h_kalman))
         # xdx[:dim_x, :dim_x] = old_stats["xdx"]
         # dxdx = np.zeros_like(xx)
-        dxdx = np.zeros((dim_h, dim_h))
+        dxdx = np.zeros((dim_h_kalman, dim_h_kalman))
         # dxdx[:dim_x, :dim_x] = old_stats["dxdx"]
-        bkx = np.zeros((dim_force, dim_h))
+        bkx = np.zeros((dim_force, dim_h_kalman))
         # bkx[:, :dim_x] = old_stats["bkx"]
         bkdx = np.zeros_like(bkx)
-        # bkdx[:, :dim_x] = old_stats["bkdx"]
+        bkbk = old_stats["bkbk"]
         # xval = traj[:-1, 2 * dim_x : 3 * dim_x]
         # dx = traj[:-1, :dim_x] - traj[:-1, dim_x : 2 * dim_x]
         q = traj[:-1, : dim_x ]
         q_plus = traj[:-1, dim_x : 2 * dim_x ]
-        bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_force * dim_x]
+        bk = traj[:-1, 3 * dim_x : 3 * dim_x + dim_force * dim_x]
         #print(bk, q , bk - q)
-        bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x : 2 * dim_x + 2 * dim_force * dim_x ]
+        #bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x : 2 * dim_x + 2 * dim_force * dim_x ]
         
-        x = muh[:-1, dim_h:]
+        x = muh[:-1, dim_h_kalman:]
+        a = q_plus-q
         #x = traj[:,2 * dim_x + 2 * dim_force * dim_x :]
         #dx = x[1:] - x[:-1]
-        dx = muh[:-1, :dim_h] - muh[:-1, dim_h:]
+        dx = muh[:-1, :dim_h_kalman] - muh[:-1, dim_h_kalman:]
         #x = x[:-1]
-        Sigh_tptp = np.mean(Sigh[:-1, :dim_h, :dim_h], axis=0)
-        Sigh_ttp = np.mean(Sigh[:-1, dim_h:, :dim_h], axis=0)
-        Sigh_tpt = np.mean(Sigh[:-1, :dim_h, dim_h:], axis=0)
-        Sigh_tt = np.mean(Sigh[:-1, dim_h:, dim_h:], axis=0)
+        Sigh_tptp = np.mean(Sigh[:-1, :dim_h_kalman, :dim_h_kalman], axis=0)
+        Sigh_ttp = np.mean(Sigh[:-1, dim_h_kalman:, :dim_h_kalman], axis=0)
+        Sigh_tpt = np.mean(Sigh[:-1, :dim_h_kalman, dim_h_kalman:], axis=0)
+        Sigh_tt = np.mean(Sigh[:-1, dim_h_kalman:, dim_h_kalman:], axis=0)
 
-        muh_tptp = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
-        muh_ttp = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, :dim_h], axis=0)
-        muh_tpt = np.mean(muh[:-1, :dim_h, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
-        muh_tt = np.mean(muh[:-1, dim_h:, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+        muh_tptp = np.mean(muh[:-1, :dim_h_kalman, np.newaxis] * muh[:-1, np.newaxis, :dim_h_kalman], axis=0)
+        muh_ttp = np.mean(muh[:-1, dim_h_kalman:, np.newaxis] * muh[:-1, np.newaxis, :dim_h_kalman], axis=0)
+        muh_tpt = np.mean(muh[:-1, :dim_h_kalman, np.newaxis] * muh[:-1, np.newaxis, dim_h_kalman:], axis=0)
+        muh_tt = np.mean(muh[:-1, dim_h_kalman:, np.newaxis] * muh[:-1, np.newaxis, dim_h_kalman:], axis=0)
 
         xx[:, :] = Sigh_tt + muh_tt
-        ## xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
+        ## xx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h_kalman:, np.newaxis] * xval[:, np.newaxis, :], axis=0)
 
         xdx[:, :] = Sigh_ttp + muh_ttp - Sigh_tt - muh_tt
-        ## xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
+        ## xdx[dim_x:, :dim_x] = np.mean(muh[:-1, dim_h_kalman:, np.newaxis] * dx[:, np.newaxis, :], axis=0)
         ## xdx[:dim_x, dim_x:] = np.mean(xval[:, :, np.newaxis] * dh[:, np.newaxis, :], axis=0)
 
         dxdx[:, :] = Sigh_tptp + muh_tptp - Sigh_ttp - Sigh_tpt - muh_ttp - muh_tpt + Sigh_tt + muh_tt
         ## dxdx[dim_x:, :dim_x] = np.mean(dh[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
 
-        bkx[:, :] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h:], axis=0)
+        bkx[:, :] = np.mean(bk[:, :, np.newaxis] * muh[:-1, np.newaxis, dim_h_kalman:], axis=0)
         bkdx[:, :] = np.mean(bk[:, :, np.newaxis] * dx[:, np.newaxis, :], axis=0)
-        bkq = np.mean(bk[:, :, np.newaxis] * q[:, np.newaxis, :], axis=0)
-
+        abk = np.mean(a[:, :, np.newaxis] * bk[:, np.newaxis, :], axis=0)
+        ax  = np.mean(a[:, :, np.newaxis] * x[:, np.newaxis, :], axis=0)
         # xx[:dim_x, dim_x:] = xx[dim_x:, :dim_x].T
         # dxdx[:dim_x, dim_x:] = dxdx[dim_x:, :dim_x].T
 
-        B = np.hstack((x, bk))
+        #B = np.hstack((x, bk))
         #print(f"B = {B, B.shape}")
-        BBT = np.mean(B[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
+        BBT = np.vstack((np.hstack((xx,bkx.T)),np.hstack((bkx, bkbk))))
         #print(f"BBT = {BBT, BBT.shape}")
-        A = q_plus-q
-        ABT = np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
+        #a = q_plus-q
+        
+        ABT = np.hstack((ax,abk))
+        #np.mean(A[:, :, np.newaxis] * B[:, np.newaxis, :], axis=0)
         #print(f"ABT = {ABT, ABT.shape}")
 
         detd = np.linalg.det(Sigh[:-1, :, :])
-        dets = np.linalg.det(Sigh[:-1, dim_h:, dim_h:])
+        dets = np.linalg.det(Sigh[:-1, dim_h_kalman:, dim_h_kalman:])
         hSdouble = 0.5 * np.log(detd[detd > 0.0]).mean()
         hSsimple = 0.5 * np.log(dets[dets > 0.0]).mean()
         # TODO take care of initial value that is missing
-        return {"BBT": BBT, "ABT": ABT, "q": q , "bkq": bkq, "dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h:], "Σ_0": Sigh[0, dim_h:, dim_h:], "hS": 0.5 * dim_h * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple}
+        return {"BBT": BBT, "ABT": ABT, "q": q , "dxdx": dxdx, "xdx": xdx, "xx": xx, "bkx": bkx, "bkdx": bkdx, "bkbk": old_stats["bkbk"], "µ_0": muh[0, dim_h_kalman:], "Σ_0": Sigh[0, dim_h_kalman:, dim_h_kalman:], "hS": 0.5 * dim_h_kalman * (1 + np.log(2 * np.pi)) + hSdouble - hSsimple}
