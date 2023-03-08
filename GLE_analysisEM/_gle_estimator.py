@@ -23,7 +23,9 @@ try:
     from ._filter_smoother import filtersmoother
 except ImportError as err:
     print(err)
-    warnings.warn("Python fallback will been used for filtersmoother module. Consider compiling the fortran module")
+    warnings.warn(
+        "Python fallback will been used for filtersmoother module. Consider compiling the fortran module"
+    )
     from ._kalman_python import filtersmoother
 
 import multiprocessing
@@ -40,7 +42,15 @@ def adder(accumulator, element, factor):
 
 def e_step_worker_pool(est, traj, datas_visible):
     muh, Sigh = est._e_step(traj)  # Compute hidden variable distribution
-    return est.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, est.dim_x, est.dim_h_kalman, est.dim_coeffs_force)
+    return est.model_class.sufficient_stats_hidden(
+        muh,
+        Sigh,
+        traj,
+        datas_visible,
+        est.dim_x,
+        est.dim_h_kalman,
+        est.dim_coeffs_force,
+    )
 
 
 class GLE_Estimator(DensityMixin, BaseEstimator):
@@ -187,20 +197,37 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         for n, key in enumerate(keys_coeffs):
             if key in coeffs:
                 init_coeffs[n] = coeffs[key]
-        self.A_init, self.C_init, self.force_init, self.mu_init, self.sig_init = init_coeffs
+        (
+            self.A_init,
+            self.C_init,
+            self.force_init,
+            self.mu_init,
+            self.sig_init,
+        ) = init_coeffs
 
     def _check_initial_parameters(self):
         """
         Check values of the basic parameters.
         """
         if self.dt <= 0.0:
-            raise ValueError("Invalid value for 'dt': %d " "Timestep should be positive" % self.dt)
+            raise ValueError(
+                "Invalid value for 'dt': %d " "Timestep should be positive" % self.dt
+            )
         if self.dim_h < 0:
-            raise ValueError("Invalid value for 'dim_h': %d " "Estimator requires non-negative hidden dimension" % self.dim_h)
+            raise ValueError(
+                "Invalid value for 'dim_h': %d "
+                "Estimator requires non-negative hidden dimension" % self.dim_h
+            )
         if self.tol < 0.0:
-            raise ValueError("Invalid value for 'tol': %.5f " "Tolerance used by the EM must be non-negative" % self.tol)
+            raise ValueError(
+                "Invalid value for 'tol': %.5f "
+                "Tolerance used by the EM must be non-negative" % self.tol
+            )
         if self.max_iter < 1:
-            raise ValueError("Invalid value for 'max_iter': %d " "Estimation requires at least one iteration" % self.max_iter)
+            raise ValueError(
+                "Invalid value for 'max_iter': %d "
+                "Estimation requires at least one iteration" % self.max_iter
+            )
 
         self.model = self.model.casefold()
 
@@ -208,42 +235,73 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             raise ValueError("Model {} not implemented".format(self.model))
         self.model_class = model_class[self.model](self.dim_x)
 
-        self.dim_h_kalman = self.dim_x * int(self.model_class.hidden_v) + self.dim_h  # Should take into account if velocity are known or inferred
+        self.dim_h_kalman = (
+            self.dim_x * int(self.model_class.hidden_v) + self.dim_h
+        )  # Should take into account if velocity are known or inferred
 
         if self.init_params == "user":
             if self.n_init != 1:
                 self.n_init = 1
-                warnings.warn("The number of initialization have been put to 1 as the coefficients are user initialized.")
+                warnings.warn(
+                    "The number of initialization have been put to 1 as the coefficients are user initialized."
+                )
 
             if self.A_init is None:
-                raise ValueError("No initial values for A is provided and init_params is set to user defined")
+                raise ValueError(
+                    "No initial values for A is provided and init_params is set to user defined"
+                )
             if self.force_init is None:
-                raise ValueError("No initial values for the force is provided and init_params is set to user defined")
+                raise ValueError(
+                    "No initial values for the force is provided and init_params is set to user defined"
+                )
             # if self.mu_init is None or self.sig_init is None:
             #     raise ValueError("No initial values for initial conditions are provided and init_params is set to user defined")
 
         if self.A_init is not None:
-            if np.asarray(self.A_init).shape != (self.dim_x + self.dim_h, self.dim_x + self.dim_h):
+            if np.asarray(self.A_init).shape != (
+                self.dim_x + self.dim_h,
+                self.dim_x + self.dim_h,
+            ):
                 raise ValueError("Wrong dimensions for A_init")
             if self.C_init is None:
                 self.C_init = np.identity(self.dim_x + self.dim_h)
-            expA, SST = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
+            expA, SST = self.model_class._convert_user_coefficients(
+                np.asarray(self.A_init), np.asarray(self.C_init), self.dt
+            )
             if not np.all(np.linalg.eigvals(SST) > 0):
-                raise ValueError("Provided user values does not lead to definite positive diffusion matrix")
+                raise ValueError(
+                    "Provided user values does not lead to definite positive diffusion matrix"
+                )
 
         if self.C_init is not None:
-            if np.asarray(self.C_init).shape != (self.dim_x + self.dim_h, self.dim_x + self.dim_h):
+            if np.asarray(self.C_init).shape != (
+                self.dim_x + self.dim_h,
+                self.dim_x + self.dim_h,
+            ):
                 raise ValueError("Wrong dimensions for C_init")
 
         if self.mu_init is not None:
             if np.asarray(self.mu_init).shape != (self.dim_h_kalman,):
-                raise ValueError("Provided user values for initial mean of hidden variables have wrong shape, provided {}, wanted {}".format(np.asarray(self.mu_init).shape, (self.dim_h,)))
+                raise ValueError(
+                    "Provided user values for initial mean of hidden variables have wrong shape, provided {}, wanted {}".format(
+                        np.asarray(self.mu_init).shape, (self.dim_h,)
+                    )
+                )
 
         if self.sig_init is not None:
-            if np.asarray(self.sig_init).shape != (self.dim_h_kalman, self.dim_h_kalman):
-                raise ValueError("Provided user values for initial variance of hidden variables have wrong shape, provided {}, wanted {}".format(np.asarray(self.sig_init).shape, (self.dim_h, self.dim_h)))
+            if np.asarray(self.sig_init).shape != (
+                self.dim_h_kalman,
+                self.dim_h_kalman,
+            ):
+                raise ValueError(
+                    "Provided user values for initial variance of hidden variables have wrong shape, provided {}, wanted {}".format(
+                        np.asarray(self.sig_init).shape, (self.dim_h, self.dim_h)
+                    )
+                )
             if not np.all(np.linalg.eigvals(self.sig_init) >= 0):
-                raise ValueError("Provided user values for initial variance of hidden variables is not a definite positive diffusion matrix")
+                raise ValueError(
+                    "Provided user values for initial variance of hidden variables is not a definite positive diffusion matrix"
+                )
 
         # We initialize the coefficients value to dummy values to ensure existence of the variables
         if not hasattr(self, "friction_coeffs"):
@@ -252,7 +310,8 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self.diffusion_coeffs = np.identity(self.dim_x + self.dim_h)
 
     def _initialize_parameters(self, random_state, traj_len=50):
-        """Initialize the model parameters.
+        """
+        Initialize the model parameters.
 
         Parameters
         ----------
@@ -263,22 +322,44 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         self.random_state = check_random_state(random_state)
         if self.init_params == "random" or self.init_params == "markov":
-            A = generateRandomDefPosMat(dim_x=self.dim_x, dim_h=self.dim_h, rng=self.random_state, max_ev=(1.0 / 50) / self.dt, min_re_ev=(0.5 / traj_len) / self.dt)  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
+            A = generateRandomDefPosMat(
+                dim_x=self.dim_x,
+                dim_h=self.dim_h,
+                rng=self.random_state,
+                max_ev=(1.0 / 50) / self.dt,
+                min_re_ev=(0.5 / traj_len) / self.dt,
+            )  # We ask the typical time scales to be correct with minimum and maximum timescale of the trajectory
             if self.C_init is None:
                 # temp_mat = generateRandomDefPosMat(self.dim_h + self.dim_x, random_state)
                 # C = temp_mat + temp_mat.T
                 C = np.identity(self.dim_x + self.dim_h)
             else:
                 C = np.asarray(self.C_init)
-            (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A, C, self.dt)
+            (
+                self.friction_coeffs,
+                self.diffusion_coeffs,
+            ) = self.model_class._convert_user_coefficients(A, C, self.dt)
         elif self.init_params == "user":
-            (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
+            (
+                self.friction_coeffs,
+                self.diffusion_coeffs,
+            ) = self.model_class._convert_user_coefficients(
+                np.asarray(self.A_init), np.asarray(self.C_init), self.dt
+            )
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
-            raise ValueError("Unimplemented initialization method '%s'" % self.init_params)
+            raise ValueError(
+                "Unimplemented initialization method '%s'" % self.init_params
+            )
 
-        if not self.OptimizeDiffusion and self.A_init is not None and self.C_init is not None:
-            _, self.diffusion_coeffs = self.model_class._convert_user_coefficients(np.asarray(self.A_init), np.asarray(self.C_init), self.dt)
+        if (
+            not self.OptimizeDiffusion
+            and self.A_init is not None
+            and self.C_init is not None
+        ):
+            _, self.diffusion_coeffs = self.model_class._convert_user_coefficients(
+                np.asarray(self.A_init), np.asarray(self.C_init), self.dt
+            )
 
         if not hasattr(self.basis, "fitted_"):  # Setup the basis if needed
             dummytraj = np.zeros((1, self.dim_x))
@@ -288,7 +369,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.force_init is not None:
             self.force_coeffs = np.asarray(self.force_init).reshape(self.dim_x, -1)
         else:
-            self.force_coeffs = -self.random_state.random(size=(self.dim_x, self.dim_coeffs_force))  # -np.ones((self.dim_x, self.dim_coeffs_force))
+            self.force_coeffs = -self.random_state.random(
+                size=(self.dim_x, self.dim_coeffs_force)
+            )  # -np.ones((self.dim_x, self.dim_coeffs_force))
 
         # Initial conditions for hidden variables, either user provided or chosen from stationnary state probability fo the hidden variables
         if self.mu_init is not None:
@@ -299,13 +382,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         if self.sig_init is not None:
             self.sig0 = np.asarray(self.sig_init)
         elif self.C_init is not None:
-            self.sig0 = self.C_init[int(not self.model_class.hidden_v) * self.dim_x :, int(not self.model_class.hidden_v) * self.dim_x :]
+            self.sig0 = self.C_init[
+                int(not self.model_class.hidden_v) * self.dim_x :,
+                int(not self.model_class.hidden_v) * self.dim_x :,
+            ]
         else:
             self.sig0 = np.identity(self.dim_h_kalman)
         self.initialized_ = True
 
     def fit(self, X, y=None, idx_trajs=[]):
-        """Estimate model parameters with the EM algorithm.
+        """
+        Estimate model parameters with the EM algorithm.
         The method iterates between E-step and M-step for ``max_iter``
         times until the change of likelihood or lower bound is less than
         ``tol``, otherwise, a ``ConvergenceWarning`` is raised.
@@ -327,7 +414,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         self.dt = X[1, 0] - X[0, 0]
         self._check_initial_parameters()
 
-        Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(
+            self.basis, X, idx_trajs=idx_trajs
+        )
         traj_list = np.split(Xproc, idx_trajs)
         _min_traj_len = np.min([trj.shape[0] for trj in traj_list])
         # print(traj_list)
@@ -346,7 +435,11 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         # Initial evalution of the sufficient statistics for observables
         datas_visible = {}
         for traj in traj_list:
-            adder(datas_visible, self.model_class.sufficient_stats(traj, self.dim_x), len(traj_list))
+            adder(
+                datas_visible,
+                self.model_class.sufficient_stats(traj, self.dim_x),
+                len(traj_list),
+            )
 
         self.coeffs_list_all = []
 
@@ -360,7 +453,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             if do_init:
                 self._initialize_parameters(self.random_state, traj_len=_min_traj_len)
                 if self.init_params == "markov":
-                    self._m_step_markov(datas_visible)  # Initialize the visibles coefficients from markovian approx
+                    self._m_step_markov(
+                        datas_visible
+                    )  # Initialize the visibles coefficients from markovian approx
 
             self._print_verbose_msg_init_beg(init)
             lower_bound = -np.infty if do_init else self.lower_bound_
@@ -376,7 +471,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 lower_bound = self.loglikelihood(new_stat)
                 if self.verbose >= 2:
                     if lower_bound - lower_bound_m_step < 0:
-                        print("Delta ll after E step:", lower_bound - lower_bound_m_step)
+                        print(
+                            "Delta ll after E step:", lower_bound - lower_bound_m_step
+                        )
                 curr_coeffs = self.get_coefficients()
                 curr_coeffs["ll"] = lower_bound
                 coeff_list_init.append(curr_coeffs)
@@ -385,10 +482,23 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 lower_bound_m_step = self.loglikelihood(new_stat)
                 if self.verbose >= 2 and lower_bound_m_step - lower_bound < 0:
                     print("Delta ll after M step:", lower_bound_m_step - lower_bound)
-                if np.isnan(lower_bound_m_step) or not self._check_finiteness():  # If we have nan value we simply restart the iteration
-                    warnings.warn("Initialization %d has NaN values. Ends iteration" % (init), ConvergenceWarning)
+                if (
+                    np.isnan(lower_bound_m_step) or not self._check_finiteness()
+                ):  # If we have nan value we simply restart the iteration
+                    warnings.warn(
+                        "Initialization %d has NaN values. Ends iteration" % (init),
+                        ConvergenceWarning,
+                    )
                     if self.verbose >= 2:
-                        print("Friction:\n{} \n Diffusion:\n{} \n Force :\n{} \n µ0 :\n{} \n Σ0:\n{} \n".format(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, self.mu0, self.sig0))
+                        print(
+                            "Friction:\n{} \n Diffusion:\n{} \n Force :\n{} \n µ0 :\n{} \n Σ0:\n{} \n".format(
+                                self.friction_coeffs,
+                                self.diffusion_coeffs,
+                                self.force_coeffs,
+                                self.mu0,
+                                self.sig0,
+                            )
+                        )
                         print("ll: {}".format(lower_bound))
                     break
 
@@ -410,9 +520,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
             self._print_verbose_msg_init_end(lower_bound, n_iter)
             self.coeffs_list_all.append(coeff_list_init)
             if not self.converged_:
-                warnings.warn("Initialization %d did not converge. " "Try different init parameters, " "or increase max_iter, tol " "or check for degenerate data." % (init + 1), ConvergenceWarning)
+                warnings.warn(
+                    "Initialization %d did not converge. "
+                    "Try different init parameters, "
+                    "or increase max_iter, tol "
+                    "or check for degenerate data." % (init + 1),
+                    ConvergenceWarning,
+                )
         if best_coeffs is not None:
-            self.set_coefficients(best_coeffs, with_basis=False)  # Don't set basis coefficients
+            self.set_coefficients(
+                best_coeffs, with_basis=False
+            )  # Don't set basis coefficients
         self.n_iter_ = best_n_iter
         self.n_best_init_ = best_n_init
         self.lower_bound_ = max_lower_bound
@@ -433,7 +551,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         Sigh : array-like, shape (n_timstep, 2*dim_h,2*dim_h)
             Covariances of the pair of the hidden variables
         """
-        Xtplus, mutilde, R, sig_tetha = self.model_class.compute_expectation_estep(traj, self.friction_coeffs, self.force_coeffs, self.dim_h, self.dt, self.diffusion_coeffs)
+        Xtplus, mutilde, R, sig_tetha = self.model_class.compute_expectation_estep(
+            traj,
+            self.friction_coeffs,
+            self.force_coeffs,
+            self.dim_h,
+            self.dt,
+            self.diffusion_coeffs,
+        )
         #       print()
         return filtersmoother(Xtplus, mutilde, R, sig_tetha, self.mu0, self.sig0)
 
@@ -441,21 +566,47 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         new_stat = {}
         if self.multiprocessing > 1:  # If we ask for more than one process
             with multiprocessing.Pool(processes=self.multiprocessing) as pool:
-                proc = [pool.apply_async(e_step_worker_pool, args=(self, traj, datas_visible)) for traj in traj_list]
+                proc = [
+                    pool.apply_async(
+                        e_step_worker_pool, args=(self, traj, datas_visible)
+                    )
+                    for traj in traj_list
+                ]
                 for p in proc:
                     ret = p.get()  # will block
                     adder(new_stat, ret, len(traj_list))
         else:
             for traj in traj_list:
                 muh, Sigh = self._e_step(traj)  # Compute hidden variable distribution
-                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, Sigh, traj, datas_visible, self.dim_x, self.dim_h_kalman, self.dim_coeffs_force), len(traj_list))
+                adder(
+                    new_stat,
+                    self.model_class.sufficient_stats_hidden(
+                        muh,
+                        Sigh,
+                        traj,
+                        datas_visible,
+                        self.dim_x,
+                        self.dim_h_kalman,
+                        self.dim_coeffs_force,
+                    ),
+                    len(traj_list),
+                )
         return new_stat
 
     def _m_step(self, sufficient_stat):
         """M step.
         .. todo::   -Select dimension of fitted parameters from the sufficient stats (To deal with markovian initialization)
         """
-        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat, self.dim_h, self.dt, self.OptimizeDiffusion, self.OptimizeForce)
+        friction, force, diffusion = self.model_class.m_step(
+            self.friction_coeffs,
+            self.diffusion_coeffs,
+            self.force_coeffs,
+            sufficient_stat,
+            self.dim_h,
+            self.dt,
+            self.OptimizeDiffusion,
+            self.OptimizeForce,
+        )
 
         self.friction_coeffs = friction
         if self.OptimizeForce:
@@ -479,21 +630,43 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         Check that all quantities are finite
         """
-        return np.isfinite(np.sum(self.friction_coeffs)) and np.isfinite(np.sum(self.diffusion_coeffs)) and np.isfinite(np.sum(self.force_coeffs)) and np.isfinite(np.sum(self.mu0)) and np.isfinite(np.sum(self.sig0))
+        return (
+            np.isfinite(np.sum(self.friction_coeffs))
+            and np.isfinite(np.sum(self.diffusion_coeffs))
+            and np.isfinite(np.sum(self.force_coeffs))
+            and np.isfinite(np.sum(self.mu0))
+            and np.isfinite(np.sum(self.sig0))
+        )
 
     def _m_step_markov(self, sufficient_stat_vis):
         """Compute coefficients estimate via Markovian approximation to provide initialization"""
-        A_full, C_full = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
-        friction, force, diffusion = self.model_class.m_step(self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, sufficient_stat_vis, 0, self.dt, self.OptimizeDiffusion, self.OptimizeForce)
+        A_full, C_full = self.model_class._convert_local_coefficients(
+            self.friction_coeffs, self.diffusion_coeffs, self.dt
+        )
+        friction, force, diffusion = self.model_class.m_step(
+            self.friction_coeffs,
+            self.diffusion_coeffs,
+            self.force_coeffs,
+            sufficient_stat_vis,
+            0,
+            self.dt,
+            self.OptimizeDiffusion,
+            self.OptimizeForce,
+        )
 
-        A, C = self.model_class._convert_local_coefficients(friction, diffusion, self.dt)
+        A, C = self.model_class._convert_local_coefficients(
+            friction, diffusion, self.dt
+        )
         A_full[: self.dim_x, : self.dim_x] = A
 
         if self.OptimizeForce:
             self.force_coeffs = force
         if self.OptimizeDiffusion:
             C_full[: self.dim_x, : self.dim_x] = C
-        (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(A_full, C_full, self.dt)
+        (
+            self.friction_coeffs,
+            self.diffusion_coeffs,
+        ) = self.model_class._convert_user_coefficients(A_full, C_full, self.dt)
 
     def loglikelihood(self, suff_datas, dim_h=None):
         """
@@ -501,7 +674,14 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         if dim_h is None:
             dim_h = self.dim_h
-        ll = self.model_class.loglikelihood(suff_datas, self.friction_coeffs, self.diffusion_coeffs, self.force_coeffs, dim_h, self.dt)
+        ll = self.model_class.loglikelihood(
+            suff_datas,
+            self.friction_coeffs,
+            self.diffusion_coeffs,
+            self.force_coeffs,
+            dim_h,
+            self.dt,
+        )
         if self.dim_h_kalman > 0 and not np.isnan(suff_datas["hS"]):
             return ll + suff_datas["hS"]
         else:
@@ -528,22 +708,42 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X = check_array(X, ensure_min_samples=4, ensure_min_features=self.dim_x)
         self.dt = X[1, 0] - X[0, 0]
 
-        Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(
+            self.basis, X, idx_trajs=idx_trajs
+        )
         traj_list = np.split(Xproc, idx_trajs)
         # Initial evalution of the sufficient statistics for observables
         new_stat = {}
         if Xh is None:
             datas_visible = {}
             for traj in traj_list:
-                adder(datas_visible, self.model_class.sufficient_stats(traj, self.dim_x), len(traj_list))
+                adder(
+                    datas_visible,
+                    self.model_class.sufficient_stats(traj, self.dim_x),
+                    len(traj_list),
+                )
             new_stat = self._e_step_stats(traj_list, datas_visible)
         else:
             traj_list_h = np.split(Xh, idx_trajs)
             for n, traj in enumerate(traj_list):
                 datas_visible = self.model_class.sufficient_stats(traj, self.dim_x)
-                zero_sig = np.zeros((len(traj), 2 * self.dim_h_kalman, 2 * self.dim_h_kalman))
+                zero_sig = np.zeros(
+                    (len(traj), 2 * self.dim_h_kalman, 2 * self.dim_h_kalman)
+                )
                 muh = np.hstack((np.roll(traj_list_h[n], -1, axis=0), traj_list_h[n]))
-                adder(new_stat, self.model_class.sufficient_stats_hidden(muh, zero_sig, traj, datas_visible, self.dim_x, self.dim_h_kalman, self.dim_coeffs_force), len(traj_list))
+                adder(
+                    new_stat,
+                    self.model_class.sufficient_stats_hidden(
+                        muh,
+                        zero_sig,
+                        traj,
+                        datas_visible,
+                        self.dim_x,
+                        self.dim_h_kalman,
+                        self.dim_coeffs_force,
+                    ),
+                    len(traj_list),
+                )
         lower_bound = self.loglikelihood(new_stat)
         return lower_bound
 
@@ -564,7 +764,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """
         check_is_fitted(self, "converged_")
         X = check_array(X, ensure_min_samples=4, ensure_min_features=self.dim_x)
-        Xproc, idx_trajs = self.model_class.preprocessingTraj(self.basis, X, idx_trajs=idx_trajs)
+        Xproc, idx_trajs = self.model_class.preprocessingTraj(
+            self.basis, X, idx_trajs=idx_trajs
+        )
         traj_list = np.split(Xproc, idx_trajs)
         muh_out = None
         for traj in traj_list:
@@ -575,7 +777,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                 muh_out = np.hstack((muh_out, muh[:, self.dim_h_kalman :]))
         return muh_out
 
-    def sample(self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3, burnout=0, rng=None):
+    def sample(
+        self, n_samples=50, n_trajs=1, x0=None, v0=None, dt=5e-3, burnout=0, rng=None
+    ):
         """Generate random samples from the fitted GLE model.
 
         Use the provided basis to compute the force term. The basis should be fitted first, if not will be fitted using a dummy trajectory.
@@ -623,7 +827,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         X_h = None
 
         if self.multiprocessing > 1:  # If we ask for more than one process
-            child_seeds = np.random.SeedSequence(self.random_state.get_state()[1]).spawn(n_trajs)
+            child_seeds = np.random.SeedSequence(
+                self.random_state.get_state()[1]
+            ).spawn(n_trajs)
             with multiprocessing.Pool(processes=self.multiprocessing) as pool:
                 proc = [
                     pool.apply_async(
@@ -660,7 +866,20 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
                         X_h = np.vstack((X_h, h[burnout:, :]))
         else:
             for n in range(n_trajs):
-                txv, h = self.model_class.generator(nsteps=n_samples, dt=self.dt, dim_h=self.dim_h, x0=x0, v0=v0, friction=self.friction_coeffs, SST=self.diffusion_coeffs, force_coeffs=self.force_coeffs, muh0=self.mu0, sigh0=self.sig0, basis=self.basis, rng=self.random_state)
+                txv, h = self.model_class.generator(
+                    nsteps=n_samples,
+                    dt=self.dt,
+                    dim_h=self.dim_h,
+                    x0=x0,
+                    v0=v0,
+                    friction=self.friction_coeffs,
+                    SST=self.diffusion_coeffs,
+                    force_coeffs=self.force_coeffs,
+                    muh0=self.mu0,
+                    sigh0=self.sig0,
+                    basis=self.basis,
+                    rng=self.random_state,
+                )
 
                 if X is None:
                     X = txv[burnout:, :]
@@ -676,8 +895,19 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
 
     def get_coefficients(self):
         """Return the actual values of the fitted coefficients."""
-        A, C = self.model_class._convert_local_coefficients(self.friction_coeffs, self.diffusion_coeffs, self.dt)
-        return {"A": A, "C": C, "force": self.force_coeffs, "µ_0": self.mu0, "Σ_0": self.sig0, "SST": self.diffusion_coeffs, "dt": self.dt, "basis": self.basis.get_coefficients()}
+        A, C = self.model_class._convert_local_coefficients(
+            self.friction_coeffs, self.diffusion_coeffs, self.dt
+        )
+        return {
+            "A": A,
+            "C": C,
+            "force": self.force_coeffs,
+            "µ_0": self.mu0,
+            "Σ_0": self.sig0,
+            "SST": self.diffusion_coeffs,
+            "dt": self.dt,
+            "basis": self.basis.get_coefficients(),
+        }
 
     def set_coefficients(self, coeffs, with_basis=True):
         """Set the value of the coefficients
@@ -687,8 +917,17 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         coeffs : dict
             Contains the value of the coefficients to set.
         """
-        (self.friction_coeffs, self.diffusion_coeffs) = self.model_class._convert_user_coefficients(np.asarray(coeffs["A"]), np.asarray(coeffs["C"]), self.dt)
-        (self.force_coeffs, self.mu0, self.sig0) = (coeffs["force"], coeffs["µ_0"], coeffs["Σ_0"])
+        (
+            self.friction_coeffs,
+            self.diffusion_coeffs,
+        ) = self.model_class._convert_user_coefficients(
+            np.asarray(coeffs["A"]), np.asarray(coeffs["C"]), self.dt
+        )
+        (self.force_coeffs, self.mu0, self.sig0) = (
+            coeffs["force"],
+            coeffs["µ_0"],
+            coeffs["Σ_0"],
+        )
         if with_basis:
             self.basis.set_coefficients(coeffs["basis"])
 
@@ -708,7 +947,9 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         bic : float
             The lower the better.
         """
-        return -2 * self.score(X) * X.shape[0] + self._n_parameters() * np.log(X.shape[0])
+        return -2 * self.score(X) * X.shape[0] + self._n_parameters() * np.log(
+            X.shape[0]
+        )
 
     def aic(self, X):
         """Akaike information criterion for the current model on the input X.
@@ -740,10 +981,23 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
         """Print verbose message on initialization."""
         if n_iter % self.verbose_interval == 0:
             if self.verbose == 1:
-                print("***Iteration EM*** : {} / {} --- Current loglikelihood {}".format(n_iter, self.max_iter, log_likelihood))
+                print(
+                    "***Iteration EM*** : {} / {} --- Current loglikelihood {}".format(
+                        n_iter, self.max_iter, log_likelihood
+                    )
+                )
             elif self.verbose >= 2:
                 cur_time = time()
-                print("***Iteration EM*** :%d / %d\t time lapse %.5fs\t Current loglikelihood %.5f loglikelihood change %.5f" % (n_iter, self.max_iter, cur_time - self._iter_prev_time, log_likelihood, diff_ll))
+                print(
+                    "***Iteration EM*** :%d / %d\t time lapse %.5fs\t Current loglikelihood %.5f loglikelihood change %.5f"
+                    % (
+                        n_iter,
+                        self.max_iter,
+                        cur_time - self._iter_prev_time,
+                        log_likelihood,
+                        diff_ll,
+                    )
+                )
                 self._iter_prev_time = cur_time
             if self.verbose >= 3:
                 print("----------------Current parameters values------------------")
@@ -752,17 +1006,35 @@ class GLE_Estimator(DensityMixin, BaseEstimator):
     def _print_verbose_msg_init_end(self, ll, best_iter):
         """Print verbose message on the end of iteration."""
         if self.verbose == 1:
-            print("Initialization converged: %s at step %i \t ll %.5f" % (self.converged_, best_iter, ll))
+            print(
+                "Initialization converged: %s at step %i \t ll %.5f"
+                % (self.converged_, best_iter, ll)
+            )
         elif self.verbose >= 2:
-            print("Initialization converged: %s at step %i \t time lapse %.5fs\t ll %.5f" % (self.converged_, best_iter, time() - self._init_prev_time, ll))
+            print(
+                "Initialization converged: %s at step %i \t time lapse %.5fs\t ll %.5f"
+                % (self.converged_, best_iter, time() - self._init_prev_time, ll)
+            )
             print("----------------Current parameters values------------------")
             print(self.get_coefficients())
 
     def _print_verbose_msg_fit_end(self, ll, best_init, best_iter):
         """Print verbose message on the end of iteration."""
         if self.verbose == 1:
-            print("Fit converged: %s Init: %s at step %i \t ll %.5f" % (self.converged_, best_init, best_iter, ll))
+            print(
+                "Fit converged: %s Init: %s at step %i \t ll %.5f"
+                % (self.converged_, best_init, best_iter, ll)
+            )
         elif self.verbose >= 2:
-            print("Fit converged: %s Init: %s at step %i \t time lapse %.5fs\t ll %.5f" % (self.converged_, best_init, best_iter, time() - self._init_prev_time, ll))
+            print(
+                "Fit converged: %s Init: %s at step %i \t time lapse %.5fs\t ll %.5f"
+                % (
+                    self.converged_,
+                    best_init,
+                    best_iter,
+                    time() - self._init_prev_time,
+                    ll,
+                )
+            )
             print("----------------Fitted parameters values------------------")
             print(self.get_coefficients())
