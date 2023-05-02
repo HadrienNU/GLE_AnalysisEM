@@ -61,7 +61,8 @@ class VEC_Model(AbstractModel):
         Basis_l = self.dim_basis
         mutilde = np.zeros((traj.shape[0], 2 * self.dim_x + dim_h))
         R = np.zeros((2 * self.dim_x + dim_h, self.dim_x + dim_h))
-        sig_tetha = np.zeros((2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
+        S_mat = np.zeros((2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
+        sig = np.zeros((2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
 
         q = traj[:, : self.dim_x]
         q_plus = traj[:, self.dim_x : 2 * self.dim_x]
@@ -78,16 +79,28 @@ class VEC_Model(AbstractModel):
 
         mutilde[:, self.dim_x : 2 * self.dim_x] = dt / 2 * (np.matmul(force, Avv.T).T + force_plus)
 
-        R[: self.dim_x, : self.dim_x] = 0.5 * dt * np.identity(self.dim_x) - Avv
+        R[: self.dim_x, : self.dim_x] = dt * (np.identity(self.dim_x) - 0.5 * Avv)
 
         R[self.dim_x :, :] = np.identity(self.dim_x + dim_h) - A_coeffs + 0.5 * np.matmul(A_coeffs, A_coeffs)
 
-        sig_tetha[: self.dim_x, : self.dim_x] = (5 * dt**2 / 12) * diffusion_coeffs[: self.dim_x, : self.dim_x]
+        sig[: self.dim_x, : self.dim_x] = diffusion_coeffs[: self.dim_x, : self.dim_x]
+        sig[self.dim_x : 2 * self.dim_x, : self.dim_x] = diffusion_coeffs[: self.dim_x, : self.dim_x]
+        sig[: self.dim_x, self.dim_x : 2 * self.dim_x] = diffusion_coeffs[: self.dim_x, : self.dim_x]
+        sig[self.dim_x :, self.dim_x :] = diffusion_coeffs
 
-        sig_tetha[self.dim_x : 2 * self.dim_x, : self.dim_x] = (dt / 2) * diffusion_coeffs[self.dim_x :, : self.dim_x] - (5 * dt / 12) * A_coeffs @ diffusion_coeffs[self.dim_x :, : self.dim_x]
-        sig_tetha[: self.dim_x, self.dim_x : 2 * self.dim_x] = sig_tetha[self.dim_x : 2 * self.dim_x, : self.dim_x].T
+        S_mat[: self.dim_x, : self.dim_x] = dt / (2 * np.sqrt(3)) * np.identity(self.dim_x)
 
-        sig_tetha[self.dim_x :, self.dim_x :] = (np.identity(self.dim_x + dim_h) - 0.5 * A_coeffs) @ diffusion_coeffs @ (np.identity(self.dim_x + dim_h) - 0.5 * A_coeffs).T + (1 / 6.0) * A_coeffs @ diffusion_coeffs @ A_coeffs.T
+        S_mat[self.dim_x : 2 * self.dim_x, : self.dim_x] = dt / 2 * np.identity(self.dim_x)
+        S_mat[: self.dim_x, self.dim_x : 2 * self.dim_x] = -Avv / (2 * np.sqrt(3))
+        S_mat[self.dim_x :, self.dim_x :] = np.identity(self.dim_x + dim_h) - 0.5 * A_coeffs
+        sig_tetha = S_mat @ sig @ S_mat.T
+
+        # sig_tetha[: self.dim_x, : self.dim_x] = (dt**2 / 3) * diffusion_coeffs[: self.dim_x, : self.dim_x]
+        #
+        # sig_tetha[self.dim_x : 2 * self.dim_x, : self.dim_x] = (dt / 2) * diffusion_coeffs[self.dim_x :, : self.dim_x] - (5 * dt / 12) * A_coeffs @ diffusion_coeffs[self.dim_x :, : self.dim_x]
+        # sig_tetha[: self.dim_x, self.dim_x : 2 * self.dim_x] = sig_tetha[self.dim_x : 2 * self.dim_x, : self.dim_x].T
+        #
+        # sig_tetha[self.dim_x :, self.dim_x :] = (np.identity(self.dim_x + dim_h) - 0.5 * A_coeffs) @ diffusion_coeffs @ (np.identity(self.dim_x + dim_h) - 0.5 * A_coeffs).T + (1 / 6.0) * A_coeffs @ diffusion_coeffs @ A_coeffs.T
 
         return q_plus, mutilde, R, sig_tetha
 
@@ -149,9 +162,13 @@ class VEC_Model(AbstractModel):
         return 0  # quad_part - 0.5 * logdet
 
     def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
-        # x_tp = x_t + dt * p_t
-        # force_t = dt * np.matmul(force_coeffs, basis.transform(np.reshape(x_t, (1, -1)))[0])
-
+        # S_mat = np.zeros((2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
+        # S_mat[: self.dim_x, : self.dim_x] = dt / (2 * np.sqrt(3)) * np.identity(self.dim_x)
+        # S_mat[self.dim_x : 2 * self.dim_x, : self.dim_x] = dt / 2 * np.identity(self.dim_x)
+        # S_mat[: self.dim_x, self.dim_x : 2 * self.dim_x] = -friction[: self.dim_x, : self.dim_x] / (2 * np.sqrt(3))
+        # S_mat[self.dim_x :, self.dim_x :] = np.identity(self.dim_x + dim_h) - 0.5 * friction
+        force_t = dt * np.matmul(force_coeffs, basis.transform(np.reshape(x_t, (1, -1)))[0])
+        x_tp = x_t + dt * (np.identity(self.dim_x) + 0.5 * friction) @ p_t + 0.5 * dt**2 * force_t
         # h_tp = h_t - np.matmul(friction[self.dim_x :, : self.dim_x], p_t) - np.matmul(friction[self.dim_x :, self.dim_x :], h_t) + gauss[self.dim_x :]
         # p_tp = p_t - np.matmul(friction[: self.dim_x, : self.dim_x], p_t) - np.matmul(friction[: self.dim_x, self.dim_x :], h_t) + force_t + gauss[: self.dim_x]
         pass
@@ -202,7 +219,7 @@ class VEC_Model(AbstractModel):
         q_plus = traj[:-1, dim_x : 2 * dim_x]
         bk = traj[:-1, 2 * dim_x : 2 * dim_x + dim_force * dim_x]
         # print(bk, q , bk - q)
-        bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x : 2 * dim_x + 2 * dim_force * dim_x]
+        # bk_plus = traj[:-1, 2 * dim_x + dim_force * dim_x : 2 * dim_x + 2 * dim_force * dim_x]
 
         x = muh[:-1, dim_h:]
         # x = traj[:,2 * dim_x + 2 * dim_force * dim_x :]
