@@ -31,7 +31,7 @@ class VEC_Model(AbstractModel):
 
         return A, C
 
-    def preprocessingTraj(self, basis, X, idx_trajs=[]):
+    def preprocessingTraj(self, basis, X, idx_trajs=[]):  # TODO: A vérifier
         x = X[:, 1 : 1 + self.dim_x]
         x_plus = np.roll(x, -1, axis=0)
         bk = basis.fit_transform(x)
@@ -51,7 +51,7 @@ class VEC_Model(AbstractModel):
 
         return Xtraj_new, idx_new
 
-    def compute_expectation_estep(self, traj, A_coeffs, force_coeffs, dim_h, dt, diffusion_coeffs):
+    def compute_expectation_estep(self, traj, A_coeffs, force_coeffs, dim_h, dt, diffusion_coeffs):  # TODO: A vérifier
         """
         Compute the value of mutilde and Xtplus
         Datas are stacked as (x, x plus proj , bk , bk plus proj)
@@ -142,7 +142,7 @@ class VEC_Model(AbstractModel):
             SST = 1
         return A, force_coeffs, SST
 
-    def loglikelihood(self, suff_datas, A, SST, coeffs_force, dim_h, dt):
+    def loglikelihood(self, suff_datas, A, SST, coeffs_force, dim_h, dt):  # TODO: A faire
         """
         Return the current value of the log-likelihood
         """
@@ -161,7 +161,7 @@ class VEC_Model(AbstractModel):
         # print(quad_part.shape)
         return 0  # quad_part - 0.5 * logdet
 
-    def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):
+    def generator_one_step(self, x_t, p_t, h_t, dt, friction, force_coeffs, basis, gauss):  # TODO: A faire
         # S_mat = np.zeros((2 * self.dim_x + dim_h, 2 * self.dim_x + dim_h))
         # S_mat[: self.dim_x, : self.dim_x] = dt / (2 * np.sqrt(3)) * np.identity(self.dim_x)
         # S_mat[self.dim_x : 2 * self.dim_x, : self.dim_x] = dt / 2 * np.identity(self.dim_x)
@@ -174,7 +174,7 @@ class VEC_Model(AbstractModel):
         pass
         # return x_tp, p_tp, h_tp
 
-    def sufficient_stats(self, traj, dim_x):
+    def sufficient_stats(self, traj, dim_x):  # TODO: A vérifier
         """
         Given a sample of trajectory, compute the averaged values of the sufficient statistics
         Datas are stacked as (xv_plus_proj, xv_proj, v, bk)
@@ -195,7 +195,7 @@ class VEC_Model(AbstractModel):
 
         return {"dxdx": np.zeros((dim_x, dim_x)), "xdx": np.zeros((dim_x, dim_x)), "xx": np.zeros((dim_x, dim_x)), "bkx": np.zeros((dim_bk, dim_x)), "bkdx": np.zeros((dim_bk, dim_x)), "bkbk": bkbk, "µ_0": 0, "Σ_0": 1, "hS": 0}
 
-    def sufficient_stats_hidden(self, muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="obabo"):
+    def sufficient_stats_hidden(self, muh, Sigh, traj, old_stats, dim_x, dim_h, dim_force, model="obabo"):  # TODO: A vérifier
         """
         Compute the sufficient statistics averaged over the hidden variable distribution
         Datas are stacked as (x, x_plus, bk, bk_plus, original_v)
