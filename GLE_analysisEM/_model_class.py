@@ -2,6 +2,7 @@
 Definition of an abstract model class to be derived by other model
 """
 import numpy as np
+import scipy.optimize
 
 
 class AbstractModel:
@@ -33,11 +34,27 @@ class AbstractModel:
         """
         raise NotImplementedError
 
-    def m_step(self, expA_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
+    def m_step(self, A_old, SST_old, coeffs_force_old, sufficient_stat, dim_h, dt, OptimizeDiffusion, OptimizeForce):
         """M step.
-        TODO:   -Select dimension of fitted parameters from the sufficient stats
+        Get results from likelihood minimization, should be reimplemented when analytic minimum is known
         """
-        raise NotImplementedError
+        # Pour choisir ce qui est optimisé on passe des arguments différents
+        init_params = np.hstack((A_old.ravel(), SST_old.ravel(), coeffs_force_old.ravel()))
+        res = scipy.optimize.minimize(self.log_likelihood_negative, init_params, args=(sufficient_stat, dim_h, dt), methods="BFGS")
+
+        A = res[: (self.dim_x + dim_h) ** 2].reshape((self.dim_x + dim_h, self.dim_x + dim_h))
+        SST = res[(self.dim_x + dim_h) ** 2, 2 * (self.dim_x + dim_h) ** 2].reshape((self.dim_x + dim_h, self.dim_x + dim_h))
+        force_coeffs = res[2 * (self.dim_x + dim_h) ** 2 :].reshape((self.dim_x, -1))
+        return A, force_coeffs, SST
+
+    def log_likelihood_negative(self, params, sufficient_stat, dim_h, dt):
+        """
+        Version of the likelihood to minimize for m_step
+        """
+        A = params[: (self.dim_x + dim_h) ** 2].reshape((self.dim_x + dim_h, self.dim_x + dim_h))
+        SST = params[(self.dim_x + dim_h) ** 2, 2 * (self.dim_x + dim_h) ** 2].reshape((self.dim_x + dim_h, self.dim_x + dim_h))
+        coeffs_force = params[2 * (self.dim_x + dim_h) ** 2 :].reshape((self.dim_x, -1))
+        return -1 * self.log_likelihood(sufficient_stat, A, SST, coeffs_force, dim_h, dt)
 
     def loglikelihood(self, suff_datas, A, SST, coeffs_force, dim_h, dt):
         """
